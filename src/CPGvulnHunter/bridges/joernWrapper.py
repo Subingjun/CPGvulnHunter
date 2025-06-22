@@ -262,6 +262,7 @@ class JoernWrapper:
         sink_query = sink.getQuery()
         """运行污点分析"""
         cmd = f"{sink_query}.reachableByDetailed({source_query}).toJsonPretty"
+        #这里直接是bydetail的结果
         result = self._execute_command(cmd)
         if result != None:
             jsonData = result
@@ -278,6 +279,11 @@ class JoernWrapper:
         function = self._get_function_by_id(node.node_id)
         if function is None:
             return
+        method_name = function.name
+        if method_name is None:
+            self.logger.warning(f"未找到node的函数名: {node.node_id}")
+            return
+        node.set_method_name(method_name)
         function_code = function.code
         if function_code is None:
             self.logger.warning(f"未找到node的函数: {node.node_id}")
