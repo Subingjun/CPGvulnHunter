@@ -21,8 +21,8 @@ class VulnerabilityResult:
         将VulnerabilityResult对象转换为字典
         """
         return {
-            "source": self.source,
-            "sink": self.sink,
+            "source": self.source.name,
+            "sink": self.sink.name,
             "is_vulnerable": self.is_vulnerable,
             "confidence": self.confidence,
             "reason": self.reason,

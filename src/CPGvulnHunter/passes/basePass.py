@@ -149,11 +149,11 @@ class BasePass(ABC):
         data_flow_results_info = [result.to_dict() for result in self.dataFlowResults]
         vulnerabilities_info = [vuln.to_dict() for vuln in self.vulnerabilitiesResults]
         result_info = {
+            'analysis_results': vulnerabilities_info,
             'sources': sources_info,
             'sinks': sinks_info,
             'sanitizers': sanitizers_info,
-            'data_flow_results': data_flow_results_info,
-            'analysis_results': vulnerabilities_info
+            'data_flow_results': data_flow_results_info
         }
         self.logger.info(f"获取分析结果: {result_info}")
         return result_info

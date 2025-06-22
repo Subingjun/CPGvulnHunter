@@ -76,6 +76,21 @@ class FlowNode:
 
     classContext: Optional[str] = None  # 方法代码（如果是方法节点）
     
+    def get_node_info(self) -> str:
+        """
+        获取节点信息字符串
+        :return: 节点信息字符串
+        """
+        node_info = f"Node ID: {self.node_id}, Label: {self.label}, Code: {self.code}"
+        if self.line_number is not None:
+            node_info += f", Location: {self.line_number}:{self.column_number}"
+        if self.type_full_name:
+            node_info += f", Type: {self.type_full_name}"
+        if self.name:
+            node_info += f", Name: {self.name}"
+        return node_info
+
+
     def set_method_code(self, method_code: str):
         """
         设置方法代码
