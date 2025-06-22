@@ -1,8 +1,0 @@
-digraph "printStructLine" {  
-node [shape="rect"];  
-"111669149717" [label = <METHOD, 49<BR/>printStructLine> ]
-"128849018901" [label = <METHOD_RETURN, 49<BR/>void> ]
-"115964117008" [label = <PARAM, 49<BR/>const twoIntsStruct * structTwoIntsStruct> ]
-  "115964117008" -> "128849018901"  [ label = "structTwoIntsStruct"] 
-  "111669149717" -> "115964117008" 
-}

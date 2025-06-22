@@ -1,9 +1,11 @@
 .idea/
-_pycache_/
+__pycache__/
 .pytest_cache/
 .venv/
 .vscode/
 test/
 venv/
+output/
 workspace/
+logs/
 config.yml

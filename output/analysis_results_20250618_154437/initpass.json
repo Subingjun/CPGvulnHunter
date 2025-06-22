@@ -1,6 +1,0 @@
-{
-    "pass_name": "initpass",
-    "analyzed_functions_count": 13,
-    "semantic_rules_count": 13,
-    "semantic_rules": "Semantics(semantic_list=[Semantic(method='strlen', param_flows=[(1, 1), (1, -1)], is_regex=False), Semantic(method='socket', param_flows=[(1, 1), (2, 2), (3, 3), (1, -1), (2, -1), (3, -1)], is_regex=False), Semantic(method='memset', param_flows=[(1, 1), (2, 2), (3, 3), (3, 1), (3, -1)], is_regex=False), Semantic(method='inet_addr', param_flows=[(1, 1), (1, -1)], is_regex=False), Semantic(method='htons', param_flows=[(1, 1), (1, -1)], is_regex=False), Semantic(method='connect', param_flows=[(1, 1), (2, 2), (3, 3), (1, -1), (2, -1), (3, -1)], is_regex=False), Semantic(method='recv', param_flows=[(1, 1), (2, 2), (3, 3), (4, 4), (1, -1), (2, -1), (3, -1), (4, -1)], is_regex=False), Semantic(method='strchr', param_flows=[(1, 1), (2, 2), (1, -1), (2, -1)], is_regex=False), Semantic(method='close', param_flows=[(1, 1), (1, -1)], is_regex=False), Semantic(method='execl', param_flows=[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (1, -1), (2, -1), (3, -1), (4, -1), (5, -1)], is_regex=False), Semantic(method='strcat', param_flows=[(1, 1), (2, 2), (2, 1), (1, -1), (2, -1)], is_regex=False), Semantic(method='srand', param_flows=[(1, 1)], is_regex=False), Semantic(method='time', param_flows=[(1, 1), (1, -1)], is_regex=False)])"
-}

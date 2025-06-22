@@ -1,8 +1,0 @@
-digraph "printHexCharLine" {  
-node [shape="rect"];  
-"111669149702" [label = <METHOD, 39<BR/>printHexCharLine> ]
-"128849018886" [label = <METHOD_RETURN, 39<BR/>void> ]
-"115964116993" [label = <PARAM, 39<BR/>char charHex> ]
-  "115964116993" -> "128849018886"  [ label = "charHex"] 
-  "111669149702" -> "115964116993" 
-}

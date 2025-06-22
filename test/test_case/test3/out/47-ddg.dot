@@ -1,8 +1,0 @@
-digraph "&lt;operator&gt;.indirection" {  
-node [shape="rect"];  
-"111669149743" [label = <METHOD<BR/>&lt;operator&gt;.indirection> ]
-"128849018927" [label = <METHOD_RETURN<BR/>ANY> ]
-"115964117056" [label = <PARAM<BR/>p1> ]
-  "115964117056" -> "128849018927"  [ label = "p1"] 
-  "111669149743" -> "115964117056" 
-}

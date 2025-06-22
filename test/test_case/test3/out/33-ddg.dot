@@ -1,8 +1,0 @@
-digraph "&lt;operator&gt;.sizeOf" {  
-node [shape="rect"];  
-"111669149729" [label = <METHOD<BR/>&lt;operator&gt;.sizeOf> ]
-"128849018913" [label = <METHOD_RETURN<BR/>ANY> ]
-"115964117028" [label = <PARAM<BR/>p1> ]
-  "115964117028" -> "128849018913"  [ label = "p1"] 
-  "111669149729" -> "115964117028" 
-}

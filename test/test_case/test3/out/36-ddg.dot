@@ -1,8 +1,0 @@
-digraph "htons" {  
-node [shape="rect"];  
-"111669149732" [label = <METHOD<BR/>htons> ]
-"128849018916" [label = <METHOD_RETURN<BR/>ANY> ]
-"115964117032" [label = <PARAM<BR/>p1> ]
-  "115964117032" -> "128849018916"  [ label = "p1"] 
-  "111669149732" -> "115964117032" 
-}

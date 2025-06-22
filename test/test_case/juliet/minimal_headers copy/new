@@ -1,8 +1,0 @@
-/* Minimal new header replacement */
-#ifndef _NEW
-#define _NEW
-
-/* Basic placement new operator */
-void* operator new(unsigned long size, void* ptr);
-
-#endif /* _NEW */

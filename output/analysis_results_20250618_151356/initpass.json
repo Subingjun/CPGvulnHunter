@@ -1,6 +1,0 @@
-{
-    "pass_name": "initpass",
-    "analyzed_functions_count": 2,
-    "semantic_rules_count": 2,
-    "semantic_rules": "Semantics(semantic_list=[Semantic(method='strchr', param_flows=[(1, 1), (2, 2), (1, -1), (2, -1)], is_regex=False), Semantic(method='srand', param_flows=[(1, 1)], is_regex=False)])"
-}

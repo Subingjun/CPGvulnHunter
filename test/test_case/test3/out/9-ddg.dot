@@ -1,8 +1,0 @@
-digraph "printShortLine" {  
-node [shape="rect"];  
-"111669149705" [label = <METHOD, 29<BR/>printShortLine> ]
-"128849018889" [label = <METHOD_RETURN, 29<BR/>void> ]
-"115964116997" [label = <PARAM, 29<BR/>short shortNumber> ]
-  "115964116997" -> "128849018889"  [ label = "shortNumber"] 
-  "111669149705" -> "115964116997" 
-}

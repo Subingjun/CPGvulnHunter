@@ -1,8 +1,0 @@
-digraph "printDoubleLine" {  
-node [shape="rect"];  
-"111669149720" [label = <METHOD, 47<BR/>printDoubleLine> ]
-"128849018904" [label = <METHOD_RETURN, 47<BR/>void> ]
-"115964117013" [label = <PARAM, 47<BR/>double doubleNumber> ]
-  "115964117013" -> "128849018904"  [ label = "doubleNumber"] 
-  "111669149720" -> "115964117013" 
-}
