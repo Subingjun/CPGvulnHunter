@@ -3,7 +3,7 @@ _pycache_/
 .pytest_cache/
 .venv/
 .vscode/
-test/testcase/
+test/
 venv/
 workspace/
 config.yml
