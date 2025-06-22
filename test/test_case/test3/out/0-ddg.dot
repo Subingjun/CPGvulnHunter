@@ -1,0 +1,12 @@
+digraph "&lt;global&gt;" {  
+node [shape="rect"];  
+"111669149696" [label = <METHOD, 1<BR/>&lt;global&gt;> ]
+"180388626432" [label = <TYPE_REF, 8<BR/>typedef struct _twoIntsStruct { int intOne;...> ]
+"124554051584" [label = <METHOD_REF, 67<BR/>CWE78_OS_Command_Injection__char_connect_socket...<BR/>&lt;empty&gt;> ]
+"124554051585" [label = <METHOD_REF, 122<BR/>goodG2B<BR/>&lt;empty&gt;> ]
+"124554051586" [label = <METHOD_REF, 134<BR/>CWE78_OS_Command_Injection__char_connect_socket...<BR/>&lt;empty&gt;> ]
+  "111669149696" -> "180388626432" 
+  "111669149696" -> "124554051584" 
+  "111669149696" -> "124554051585" 
+  "111669149696" -> "124554051586" 
+}

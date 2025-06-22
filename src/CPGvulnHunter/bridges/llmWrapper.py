@@ -6,13 +6,12 @@ import logging
 import time
 
 from CPGvulnHunter.bridges.llmBridge import LLMBridge
-from CPGvulnHunter.core.config import LLMConfig
+from CPGvulnHunter.core.config import ConfigManager
 from CPGvulnHunter.models.cpg.flowPath import FlowPath
 from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import ParameterFlow, Semantic, Semantics
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.prompt import FunctionPrompt
-from CPGvulnHunter.utils.llmCacher import LLMCacher
 
 
 
@@ -24,28 +23,22 @@ class LLMWrapper:
     提供智能化的静态代码分析辅助功能
     """
 
-    def __init__(self, llmConfig:LLMConfig):
+    def __init__(self):
         """
         初始化LLM桥接器
-        
-        :param llmConfig: LLM配置对象
         """
         self.logger = logging.getLogger(__name__)      
         self.logger.info("开始初始化LLM Wrapper...")
-        
-        # Ensure logger uses the level from config
-        self.logger.setLevel(logging.getLogger().level)
-        self.cacher = LLMCacher(llmConfig.cache_file)  # 初始化缓存器
-
+        self.config = ConfigManager.get_llm_config()
         try:
             # 初始化LLM客户端
-            self.logger.debug(f"LLM配置 - 模型: {llmConfig.model}, 基础URL: {llmConfig.base_url}")
+            self.logger.debug(f"LLM配置 - 模型: {self.config.model}, 基础URL: {self.config.base_url}")
             
             start_time = time.time()
             self.llm_client = LLMBridge(
-                base_url=llmConfig.base_url,
-                api_key=llmConfig.api_key,
-                model=llmConfig.model
+                base_url=self.config.base_url,
+                api_key=self.config.api_key,
+                model=self.config.model
             )
             init_time = time.time() - start_time
             
@@ -130,34 +123,24 @@ class LLMWrapper:
             
         func_name = func.full_name
         self.logger.debug(f"开始分析函数: {func_name}")
-        cache = self.cacher.find_cache(func.generateSignature())
-        if cache:
-            self.logger.info(f"函数 {func_name} 的分析结果已在缓存中，直接返回")
-            data = cache
-        else:
-            self.logger.info(f"函数 {func_name} 的分析结果不在缓存中，开始构建LLM请求")
-            # 构建针对单个函数的提示词
-            try:
-                request = FunctionPrompt.build_semantic_analysis_request(func)
-                self.logger.debug(f"为函数 {func_name} 构建分析请求完成")
-            except Exception as e:
-                self.logger.error(f"为函数 {func_name} 构建分析请求失败: {e}")
-                return None
-            
-            # 发送请求并获取响应
-            try:
-                start_time = time.time()
-                data: dict = self.llm_client.send(request, True)
-                request_time = time.time() - start_time
-                self.logger.debug(f"函数 {func_name} LLM请求完成，耗时: {request_time:.2f}秒")
-                self.cacher.add_cache(func.generateSignature(), data)  # 缓存结果
-            except Exception as e:
-                self.logger.error(f"函数 {func_name} LLM请求失败: {e}")
-                return None
+        self.logger.info(f"函数 {func_name} 的分析结果不在缓存中，开始构建LLM请求")
+        # 构建针对单个函数的提示词
+        try:
+            request = FunctionPrompt.build_semantic_analysis_request(func)
+            self.logger.debug(f"为函数 {func_name} 构建分析请求完成")
+        except Exception as e:
+            self.logger.error(f"为函数 {func_name} 构建分析请求失败: {e}")
+            return None
         
-        # Debug log: Print all data received from LLM
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"函数 {func_name} - LLM返回的完整数据: {json.dumps(data, indent=2, ensure_ascii=False)}")
+        # 发送请求并获取响应
+        try:
+            start_time = time.time()
+            data: dict = self.llm_client.send(request)
+            request_time = time.time() - start_time
+            self.logger.debug(f"函数 {func_name} LLM请求完成，耗时: {request_time:.2f}秒")
+        except Exception as e:
+            self.logger.error(f"函数 {func_name} LLM请求失败: {e}")
+            return None
         
         # 解析语义规则
         try:      
@@ -209,7 +192,6 @@ class LLMWrapper:
             self.logger.info(f"函数 {func_name} 语义规则生成成功 - 参数流数量: {len(param_flows)}, 置信度: {confidence}")
             if reasoning:
                 self.logger.debug(f"函数 {func_name} 分析依据: {reasoning}")
-
             return rule
             
         except Exception as e:
@@ -229,21 +211,17 @@ class LLMWrapper:
         with open('./logs/llm_request.json', 'a', encoding='utf-8') as f:
             f.write(request.prompt + '\n')
         start_time = time.time()
-        data: dict = self.llm_client.send(request, True)
+        data: dict = self.llm_client.send(request)
         request_time = time.time() - start_time
-        
         self.logger.debug(f"LLM请求完成，耗时: {request_time:.2f}秒")
-        
         # 检查响应格式
         if not isinstance(data, dict):
             self.logger.error(f"LLM返回数据不是字典类型: {type(data)}")
             return None
         
         self.logger.debug(f"LLM响应数据包含 {len(data)} 个顶级字段: {list(data.keys())}")
-        
         # 返回分析结果
         return data
-
 
     def function_clasification(self, llmRequest: LLMRequest) -> Optional[dict]:
         """
@@ -261,7 +239,7 @@ class LLMWrapper:
         try:
             # 发送请求并获取响应
             start_time = time.time()
-            data: dict = self.llm_client.send(llmRequest, True)
+            data: dict = self.llm_client.send(llmRequest)
             request_time = time.time() - start_time
             self.logger.debug(f"LLM请求完成，耗时: {request_time:.2f}秒")
             

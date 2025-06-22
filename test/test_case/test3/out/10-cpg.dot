@@ -1,0 +1,13 @@
+digraph "printLongLine" {  
+node [shape="rect"];  
+"111669149706" [label = <METHOD, 33<BR/>printLongLine> ]
+"115964116998" [label = <PARAM, 33<BR/>long longNumber> ]
+"25769803794" [label = <BLOCK<BR/>&lt;empty&gt;> ]
+"128849018890" [label = <METHOD_RETURN, 33<BR/>void> ]
+  "111669149706" -> "115964116998"  [ label = "AST: "] 
+  "111669149706" -> "25769803794"  [ label = "AST: "] 
+  "111669149706" -> "128849018890"  [ label = "AST: "] 
+  "111669149706" -> "128849018890"  [ label = "CFG: "] 
+  "115964116998" -> "128849018890"  [ label = "DDG: longNumber"] 
+  "111669149706" -> "115964116998"  [ label = "DDG: "] 
+}

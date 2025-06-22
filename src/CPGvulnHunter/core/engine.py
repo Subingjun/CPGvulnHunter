@@ -9,7 +9,7 @@ from datetime import datetime
 import importlib
 
 from CPGvulnHunter.core.cpg import CPG
-from CPGvulnHunter.core.config import UnifiedConfig
+from CPGvulnHunter.core.config import ConfigManager
 from CPGvulnHunter.core.passRegistry import PassRegistry
 from CPGvulnHunter.models.AnalysisResult import AnalysisResult
 from CPGvulnHunter.passes.basePass import BasePass
@@ -31,8 +31,7 @@ class VulnerabilityEngine:
     """
     
     def __init__(self, 
-                 config_file: Optional[str] = None,
-                 config: Optional[UnifiedConfig] = None):
+                 config_file: Optional[str] = None):
         """
         初始化漏洞分析引擎
         
@@ -40,34 +39,23 @@ class VulnerabilityEngine:
             config_file: 配置文件路径
             config: 统一配置对象（与config_file二选一）
         """        
-        # 加载配置
-        if config is not None:
-            self.config = config
-        elif config_file is not None:
-            self.config = UnifiedConfig.from_file(config_file)
-        else:
-            self.config = UnifiedConfig()
-        
+        # 初始化配置管理器
+        ConfigManager.initialize(config_file)
+        self.log_config = ConfigManager.get_logging_config()
+        self.engine_config = ConfigManager.get_engine_config()
         # 使用LoggerConfigurator设置日志
-        LoggerConfigurator.setup_logging(self.config.logging)
+        LoggerConfigurator.setup_logging(self.log_config)
         self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         self.logger.debug(f"配置文件: {config_file}")
-        self.logger.debug(f"启用的分析passes: {self.config.engine.enabled_passes}")
-        self.logger.debug(f"最大调用深度: {self.config.engine.max_call_depth}")
-        self.logger.debug(f"并行执行: {self.config.engine.parallel_execution}")
-        # 分析结果
-        self.results: List[AnalysisResult] = []
-        self.start_time: Optional[float] = None
-        self.end_time: Optional[float] = None
         # 创建输出目录
-        self.output_dir = Path(self.config.engine.output_dir)
+        self.output_dir = Path(self.engine_config.output_dir)  # 默认输出目录为output
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logger.debug(f"输出目录: {self.output_dir.absolute()}")
         self.logger.info("引擎初始化完成")
     
 
     def run(self,src_path: str,passes:list[str]) :
-        task = Task(target_src_path=src_path, output_path=self.output_dir, passes=passes,config = self.config)
+        task = Task(target_src_path=src_path, output_path=str(self.output_dir), passes=passes)
         task.run()
         
 

@@ -15,6 +15,19 @@ from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.dataflowResult import VulnerabilityResult
 from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 
+class BasePassResult():
+    """
+    存储应该如下:
+    1. pass_name: str - Pass的名称
+    2. sources: List[Source] - 源函数列表
+    3. sinks: List[Sink] - 汇聚点函数列表
+    4. sanitizers: List[Function] - 清理函数列表
+    5. dataFlowResults: List[DataFlowResult] - 数据流分析结果
+    6. vulnerabilitiesResults: List[VulnerabilityResult] - 漏洞分析结果
+    """
+
+
+
 class BasePass(ABC):
     """base pass class for all passes"""
     
@@ -85,7 +98,7 @@ class BasePass(ABC):
                         source,
                         sink
                     )
-                    if not dataflow_result:
+                    if not dataflow_result or dataflow_result.flows is None or len(dataflow_result.flows) == 0:
                         logging.info(f"源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流分析未找到路径")
                         continue
                     self.dataFlowResults.append(dataflow_result)
@@ -100,19 +113,22 @@ class BasePass(ABC):
             self.logger.error("Joern wrapper未初始化，无法执行数据流分析")
             return None
         for result in self.dataFlowResults:
+            self.logger.debug(f"开始分析数据流: {result}")
             for flow in result.flows:
                 try:
                     self.logger.info(f"分析数据流路径: {flow}")
                     request = self.build_dataflow_analysis_request(flow)
                     self.logger.debug(f"构建的数据流分析请求: {request.prompt}")
-                    result  = self.cpg.llm_wrapper.analyze_dataflow(request)
+                    llm_result  = self.cpg.llm_wrapper.analyze_dataflow(request)
                     # 将结果转换为 DataflowResult 类型
-                    if result and 'analysis_result' in result:
-                        analysis = result['analysis_result']
+                    if llm_result and 'analysis_result' in llm_result:
+                        llm_result = llm_result['analysis_result']
                         analysis_result = VulnerabilityResult(
-                            is_vulnerable=analysis.get('is_vulnerable', None),
-                            confidence=analysis.get('confidence', None),
-                            reason=analysis.get('reason', None),
+                            source=result.source.to_dict(),
+                            sink=result.sink.to_dict(),
+                            is_vulnerable=llm_result.get('is_vulnerable', None),
+                            confidence=llm_result.get('confidence', None),
+                            reason=llm_result.get('reason', None),
                             flowPath_code=flow._get_function_chain()
                         )
                         self.vulnerabilitiesResults.append(analysis_result)
@@ -174,10 +190,11 @@ class BasePass(ABC):
         logging.info(f"汇聚点函数列表: {[sink.full_name for sink in self.sinks]}")
         logging.info(f"清理函数列表: {[sanitizer.full_name for sanitizer in self.sanitizers]}")
         # 对每个源-汇聚点对执行数据流分析
-        self.taint_analysis()
-        self.vuln_analysis()
+        self.taint_analysis()#污点分析
+        self.vuln_analysis()#污点分析结果交给大模型分析
         self._save_results(output_path)
         # 返回漏洞发现结果
         return None
+
 
 

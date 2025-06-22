@@ -4,6 +4,8 @@ import logging
 from typing import Optional, Dict, Any
 from contextlib import contextmanager
 
+from CPGvulnHunter.models.llm.dataclass import LLMRequest
+
 class LLMCacher:
     """
     A class to cache LLM responses to avoid redundant API calls.
@@ -38,17 +40,19 @@ class LLMCacher:
                 return {}
         return {}
 
-    def find_cache(self, request) -> Optional[Any]:
+    def find_cache(self, request:str) -> Optional[Any]:
         """查找缓存的响应"""
         if not self.caches:
             return None
         key = self._calculate_cache_key(request)
-        return self.caches.get(key)
+        if key not in self.caches:
+            return None
+        return self.caches.get(key).get("response") 
     
-    def add_cache(self, request, response):
+    def add_cache(self, request, response:dict):
         """添加新的缓存条目"""
         key = self._calculate_cache_key(request)
-        self.caches[key] = response
+        self.caches[key] = {"request":request,"response":response}
         self._dirty = True  # 标记缓存已修改
 
     def _calculate_cache_key(self, request) -> str:

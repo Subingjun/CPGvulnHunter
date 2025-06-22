@@ -1,0 +1,1324 @@
+{
+    "02bd1fd74a71d4fc96c37be8a11b1a19": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: strlen\n函数签名: ANY strlen(ANY)\n\n函数用法: dataLen = strlen(data)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"strlen\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strlen",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "strlen函数的数据流分析显示，参数1（输入字符串）的内容直接影响返回值（字符串长度）。因此，必须包含参数1的自传递映射以确保污点分析的连续性，同时参数1到返回值的数据流映射反映了参数内容对返回值的直接影响。"
+            }
+        }
+    },
+    "657c6bfd14f6692138925583e124c345": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: socket\n函数签名: ANY socket(ANY, ANY, ANY)\n\n函数用法: connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"socket\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "socket",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    },
+                    {
+                        "from": 3,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The socket function's parameters (domain, type, protocol) influence the returned socket descriptor. Each parameter is passed through to itself to maintain taint continuity, and all parameters can affect the return value, hence the parameter-to-return flows."
+            }
+        }
+    },
+    "b2c8487e6c6bfaabb5e972dd966c8add": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: memset\n函数签名: ANY memset(ANY, ANY, ANY)\n\n函数用法: {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"memset\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "memset",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 2,
+                        "to": 1
+                    },
+                    {
+                        "from": 3,
+                        "to": 1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "memset函数将第二个参数的值填充到第一个参数指向的内存区域，填充的字节数由第三个参数指定。因此，数据从第二个参数流向第一个参数，第三个参数控制填充的字节数也影响第一个参数的内容。所有参数都需要透传以保持污点分析的连续性。"
+            }
+        }
+    },
+    "56344b16a70cd70816b437bbe4763749": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: inet_addr\n函数签名: ANY inet_addr(ANY)\n\n函数用法: service.sin_addr.s_addr = inet_addr(\"127.0.0.1\")\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"inet_addr\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "inet_addr",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "inet_addr函数将输入的字符串参数转换为网络地址格式，并返回该地址。因此，参数1（输入字符串）直接影响返回值。为了确保污点分析的连续性，参数1需要透传给自身，并且参数1的数据流向返回值。"
+            }
+        }
+    },
+    "220c4fe56b8cbed00bc16b1b5bee68c5": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: htons\n函数签名: ANY htons(ANY)\n\n函数用法: service.sin_port = htons(27015)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"htons\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "htons",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The function 'htons' takes a single parameter and returns a value derived from it. The parameter is passed through to itself to maintain taint continuity, and it also flows to the return value as the function's output is directly influenced by its input."
+            }
+        }
+    },
+    "6b36c6b2a416326215a87efd40c77d17": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: connect\n函数签名: ANY connect(ANY, ANY, ANY)\n\n函数用法: connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"connect\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "connect",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    },
+                    {
+                        "from": 3,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The connect function's parameters (connectSocket, service address, and size of service) all potentially influence the return value, indicating a failure or success of the connection attempt. Therefore, all parameters are considered to pass through to themselves to maintain taint continuity and also influence the return value."
+            }
+        }
+    },
+    "54b35a1dfe0302d7557e8e4aa290d942": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: recv\n函数签名: ANY recv(ANY, ANY, ANY, ANY)\n\n函数用法: recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"recv\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "recv",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 4,
+                        "to": 4
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    },
+                    {
+                        "from": 3,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "数据从参数2（数据缓冲区）和参数3（数据大小）流向返回值，同时所有参数都包含自传递映射以确保污点分析的连续性。"
+            }
+        }
+    },
+    "2d925345ccdb739fa8c9c4343b1771b3": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: strchr\n函数签名: ANY strchr(ANY, ANY)\n\n函数用法: replace = strchr(data, '\\r')\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"strchr\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strchr",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "strchr函数用于在字符串中查找字符，第一个参数是待查找的字符串，第二个参数是要查找的字符。函数返回找到的字符的位置指针或NULL。因此，参数1和参数2都会影响返回值，需要包含参数透传映射以及参数到返回值的数据流。"
+            }
+        }
+    },
+    "0891a8db33771716f83b64b996074134": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: close\n函数签名: ANY close(ANY)\n\n函数用法: {\n            close(connectSocket);\n        }\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"close\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "close",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The 'close' function typically involves closing a resource (e.g., a socket) and does not involve data flow between parameters or from parameters to the return value. However, to ensure taint analysis continuity, the parameter is passed through to itself."
+            }
+        }
+    },
+    "c971d83c06d9bbd941cc6756b646522e": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: execl\n函数签名: ANY execl(ANY, ANY, ANY, ANY, ANY)\n\n函数用法: {\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"execl\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "execl",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 4,
+                        "to": 4
+                    },
+                    {
+                        "from": 5,
+                        "to": 5
+                    },
+                    {
+                        "from": 4,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "数据流分析显示，参数4（data）被用作命令执行的一部分，因此它会影响函数的执行结果。其他参数主要用于控制执行流程或提供静态值，不直接参与数据流动。参数透传确保了所有参数的污点状态在函数调用过程中得到保持。"
+            }
+        }
+    },
+    "9fbd88d13a3a663eac9cba1ae74e96f3": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: strcat\n函数签名: ANY strcat(ANY, ANY)\n\n函数用法: {\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n\n    strcat(data, \"*.*\");\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"strcat\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strcat",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 2,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "strcat函数将第二个参数的数据追加到第一个参数指向的字符串末尾，并返回第一个参数的指针。因此，数据从参数2流向参数1，同时参数1和参数2的数据都会影响返回值。为了确保污点分析的连续性，包含了参数1和参数2的自传递映射。"
+            }
+        }
+    },
+    "20ef653ee68ed78dc782ad347320b8dc": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: srand\n函数签名: ANY srand(ANY)\n\n函数用法: {\n\n    srand( (unsigned)time(NULL) );\n\n    printLine(\"Calling good()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\n    printLine(\"Finished good()\");\n\n\n    printLine(\"Calling bad()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\n    printLine(\"Finished bad()\");\n\n    return 0;\n}\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"srand\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "srand",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The function 'srand' takes a single parameter which is used to seed the random number generator. There is no data flow between parameters or to a return value, as the function does not return any value (void return type). The only necessary data flow mapping is the parameter pass-through for the input parameter to ensure taint analysis continuity."
+            }
+        }
+    },
+    "840ac8dbc2b614731c444590fceb5574": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: time\n函数签名: ANY time(ANY)\n\n函数用法: (unsigned)time(NULL)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"time\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "time",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The 'time' function typically returns the current calendar time, which is influenced by its parameter (if any). In the case of 'time(NULL)', the parameter does not carry any data that affects the return value, but for completeness and to maintain taint analysis continuity, we include the parameter-to-parameter and parameter-to-return flows. The high confidence level is due to the standard behavior of the 'time' function across different implementations."
+            }
+        }
+    },
+    "32fd832c1550e2a1d263464809a95842": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strlen\nFull Name: strlen\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strlen\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strlen",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "strlen函数用于计算字符串的长度，不涉及命令的执行或用户输入的接收，因此与命令注入无关。",
+                        "parameter_description": "待计算长度的字符串"
+                    }
+                ]
+            }
+        }
+    },
+    "02d42938351a26473b83b7467798be14": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: socket\nFull Name: socket\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"socket\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "socket",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The socket function is used to create a new socket and does not involve any command execution or user input that could lead to OS command injection.",
+                        "parameter_description": "Domain parameter specifying the communication domain (e.g., AF_INET for IPv4)."
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "The type parameter specifies the communication semantics (e.g., SOCK_STREAM for TCP). It does not involve any command execution or user input.",
+                        "parameter_description": "Type parameter specifying the socket type."
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "3",
+                        "confidence": "1.0",
+                        "reason": "The protocol parameter specifies a particular protocol to be used with the socket. It does not involve any command execution or user input.",
+                        "parameter_description": "Protocol parameter specifying the protocol to be used with the socket."
+                    }
+                ]
+            }
+        }
+    },
+    "0778804686b36facae98243f1c94ae2c": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: memset\nFull Name: memset\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"memset\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "memset",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "memset函数用于填充内存块，不涉及命令执行或用户输入的处理，因此与命令注入无关。",
+                        "parameter_description": "指向要填充的内存块的指针"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "memset函数用于填充内存块，不涉及命令执行或用户输入的处理，因此与命令注入无关。",
+                        "parameter_description": "要设置的值。该值作为int传递，但函数使用该值的unsigned char转换来填充内存块"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "3",
+                        "confidence": "1.0",
+                        "reason": "memset函数用于填充内存块，不涉及命令执行或用户输入的处理，因此与命令注入无关。",
+                        "parameter_description": "要设置为该值的字节数"
+                    }
+                ]
+            }
+        }
+    },
+    "1e15e734f0e52f45d494f4273f0a20df": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: inet_addr\nFull Name: inet_addr\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"inet_addr\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "inet_addr",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "inet_addr函数用于将点分十进制的IP地址转换为网络字节序的32位整数，不涉及命令执行或用户输入的处理，因此与命令注入无关。",
+                        "parameter_description": "点分十进制的IP地址字符串"
+                    }
+                ]
+            }
+        }
+    },
+    "643a5e08b55b4194e5beccf22c9a1ab3": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: htons\nFull Name: htons\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"htons\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "htons",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "htons函数用于将主机字节顺序转换为网络字节顺序，不涉及任何形式的命令执行或用户输入处理，因此与命令注入无关。",
+                        "parameter_description": "主机字节顺序的16位无符号整数"
+                    }
+                ]
+            }
+        }
+    },
+    "292ed678a11012807af16bacbbb073af": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: connect\nFull Name: connect\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"connect\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "connect",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "N/A",
+                        "confidence": 1.0,
+                        "reason": "The function 'connect' is typically used in network programming to establish a connection to a socket. It does not involve command execution or handling user input that could lead to OS command injection.",
+                        "parameter_description": "N/A"
+                    }
+                ]
+            }
+        }
+    },
+    "937aa4b96af066c9cf2ba4f890c43f16": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: recv\nFull Name: recv\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"recv\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "recv",
+                "roles": [
+                    {
+                        "role": "SOURCE",
+                        "parameter_index": 1,
+                        "confidence": 0.9,
+                        "reason": "The first parameter of 'recv' is a buffer that receives data from a network socket, which can include untrusted input from external sources.",
+                        "parameter_description": "Buffer to store the received data"
+                    }
+                ]
+            }
+        }
+    },
+    "9d78b326bd4e84606bd7ffb3063f65dc": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strchr\nFull Name: strchr\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strchr\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strchr",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "strchr函数用于在字符串中查找字符，不涉及用户输入或命令执行，因此与命令注入无关。",
+                        "parameter_description": "待搜索的字符串"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "strchr函数用于在字符串中查找字符，不涉及用户输入或命令执行，因此与命令注入无关。",
+                        "parameter_description": "要查找的字符"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "-1",
+                        "confidence": "1.0",
+                        "reason": "strchr函数的返回值是指向找到的字符的指针，不涉及用户输入或命令执行，因此与命令注入无关。",
+                        "parameter_description": "指向找到的字符的指针，如果未找到则返回NULL"
+                    }
+                ]
+            }
+        }
+    },
+    "641944840cf736e9ee227153c4833a66": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: close\nFull Name: close\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"close\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "close",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "N/A",
+                        "confidence": 1.0,
+                        "reason": "The 'close' function is typically used to close a file descriptor and does not involve command execution or data input that could lead to OS command injection.",
+                        "parameter_description": "N/A"
+                    }
+                ]
+            }
+        }
+    },
+    "52103488688046159d11e75f2912c2f8": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: execl\nFull Name: execl\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"execl\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "execl",
+                "roles": [
+                    {
+                        "role": "SINK",
+                        "parameter_index": 1,
+                        "confidence": 1.0,
+                        "reason": "The first parameter 'path' specifies the executable to be run, making it a direct point of command execution.",
+                        "parameter_description": "Path to the executable to be run."
+                    },
+                    {
+                        "role": "SINK",
+                        "parameter_index": 2,
+                        "confidence": 1.0,
+                        "reason": "The second parameter 'arg0' and subsequent variadic arguments are passed as arguments to the executable, which can include user-controlled input leading to command injection.",
+                        "parameter_description": "Arguments passed to the executable, starting with the executable name."
+                    }
+                ]
+            }
+        }
+    },
+    "101eb256f278c1158d76efdd05462c22": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strcat\nFull Name: strcat\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strcat\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strcat",
+                "roles": [
+                    {
+                        "role": "SOURCE",
+                        "parameter_index": 2,
+                        "confidence": 0.8,
+                        "reason": "The second parameter of 'strcat' is the source string that is appended to the destination string. If this string is derived from user input or other untrusted sources without proper sanitization, it could lead to command injection vulnerabilities when the resulting string is used in a command execution context.",
+                        "parameter_description": "Source string to be appended to the destination string"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": 1,
+                        "confidence": 0.9,
+                        "reason": "The first parameter of 'strcat' is the destination string buffer. While it is modified by the function, it is not directly involved in introducing untrusted data or executing commands, unless it is used in a vulnerable context elsewhere in the code.",
+                        "parameter_description": "Destination string buffer where the source string is appended"
+                    }
+                ]
+            }
+        }
+    },
+    "0231b97e1ed8bb6f896c3b882d1acf41": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: srand\nFull Name: srand\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"srand\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "srand",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The 'srand' function is used to seed the random number generator used by the 'rand' function. It does not involve any user input or command execution, making it unrelated to command injection vulnerabilities.",
+                        "parameter_description": "Seed value for the random number generator"
+                    }
+                ]
+            }
+        }
+    },
+    "ae5889473f9c2ba960f840b4b492e0c2": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: time\nFull Name: time\nSignature: N/A\nFile: <empty>\ncode: <empty>\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"time\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "time",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "N/A",
+                        "confidence": 1.0,
+                        "reason": "The 'time' function is used to get the current calendar time and does not involve any command execution or user input processing, making it irrelevant to command injection vulnerabilities.",
+                        "parameter_description": "N/A"
+                    }
+                ]
+            }
+        }
+    },
+    "b658aba47c00d040adb1950049976989": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strlen\nFull Name: strlen\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: dataLen = strlen(data)\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strlen\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strlen",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "strlen函数用于计算字符串的长度，不涉及命令的执行或用户输入的接收，因此与命令注入无关。",
+                        "parameter_description": "待计算长度的字符串"
+                    }
+                ]
+            }
+        }
+    },
+    "4ed1f8f07e6afcc47687e3e43bb0a0a0": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: socket\nFull Name: socket\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"socket\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "socket",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The first parameter specifies the address family (e.g., AF_INET) and does not involve user input or command execution.",
+                        "parameter_description": "Address family specification"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "The second parameter specifies the socket type (e.g., SOCK_STREAM) and does not involve user input or command execution.",
+                        "parameter_description": "Socket type specification"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "3",
+                        "confidence": "1.0",
+                        "reason": "The third parameter specifies the protocol (e.g., IPPROTO_TCP) and does not involve user input or command execution.",
+                        "parameter_description": "Protocol specification"
+                    }
+                ]
+            }
+        }
+    },
+    "cab7d02847592423c1f0a810ab34f3d3": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: memset\nFull Name: memset\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"memset\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "memset",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "memset函数用于内存初始化，不涉及命令注入的输入或执行点。",
+                        "parameter_description": "目标内存地址"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "memset函数的第二个参数是填充的值，与命令注入无关。",
+                        "parameter_description": "填充的值"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "3",
+                        "confidence": "1.0",
+                        "reason": "memset函数的第三个参数是填充的字节数，与命令注入无关。",
+                        "parameter_description": "填充的字节数"
+                    }
+                ]
+            }
+        }
+    },
+    "bce19d7ad08f90e64fb93921e6660d23": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: inet_addr\nFull Name: inet_addr\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: service.sin_addr.s_addr = inet_addr(\"127.0.0.1\")\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"inet_addr\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "inet_addr",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "inet_addr函数用于将点分十进制的IP地址字符串转换为网络字节顺序的二进制值，不涉及命令执行或用户输入的处理，因此与命令注入无关。",
+                        "parameter_description": "点分十进制的IP地址字符串"
+                    }
+                ]
+            }
+        }
+    },
+    "a1b2318dea9ee5da2132bf85c940835e": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: htons\nFull Name: htons\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: service.sin_port = htons(27015)\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"htons\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "htons",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "htons函数用于将主机字节顺序转换为网络字节顺序，不涉及任何形式的命令执行或数据处理，因此与命令注入无关。",
+                        "parameter_description": "待转换的16位无符号整数"
+                    }
+                ]
+            }
+        }
+    },
+    "a856d80b7181efba0675de02dd549997": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: connect\nFull Name: connect\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"connect\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "connect",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The first parameter 'connectSocket' is a socket descriptor, which is not related to command injection.",
+                        "parameter_description": "Socket descriptor"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "The second parameter is a pointer to a sockaddr structure containing the destination address and port, not related to command injection.",
+                        "parameter_description": "Pointer to sockaddr structure"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "3",
+                        "confidence": "1.0",
+                        "reason": "The third parameter is the size of the sockaddr structure, not related to command injection.",
+                        "parameter_description": "Size of sockaddr structure"
+                    }
+                ]
+            }
+        }
+    },
+    "8af63a828e83f79ba3c462b78b4d537c": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: recv\nFull Name: recv\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"recv\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "recv",
+                "roles": [
+                    {
+                        "role": "SOURCE",
+                        "parameter_index": 2,
+                        "confidence": 0.9,
+                        "reason": "The second parameter is a pointer to the buffer where the received data will be stored, making it a potential source of untrusted data from the network.",
+                        "parameter_description": "Buffer to store received data"
+                    }
+                ]
+            }
+        }
+    },
+    "fd0daeca7b950f56ed63aa4fecb4804b": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strchr\nFull Name: strchr\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: replace = strchr(data, '\\r')\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strchr\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strchr",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "strchr函数用于在字符串中查找字符，不涉及命令注入的输入或执行。",
+                        "parameter_description": "待搜索的字符串"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "2",
+                        "confidence": "1.0",
+                        "reason": "strchr函数的第二个参数是要查找的字符，不涉及命令注入的输入或执行。",
+                        "parameter_description": "要查找的字符"
+                    },
+                    {
+                        "role": "NONE",
+                        "parameter_index": "-1",
+                        "confidence": "1.0",
+                        "reason": "strchr函数的返回值是指向找到的字符的指针，不涉及命令注入的输入或执行。",
+                        "parameter_description": "指向找到的字符的指针，如果未找到则返回NULL"
+                    }
+                ]
+            }
+        }
+    },
+    "54984c4f93160ab6f5fcb8d01bd94624": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: close\nFull Name: close\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n            close(connectSocket);\n        }\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"close\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "close",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The function 'close' is used to close a file descriptor or socket and does not involve any command execution or data input that could lead to OS command injection.",
+                        "parameter_description": "File descriptor or socket to be closed."
+                    }
+                ]
+            }
+        }
+    },
+    "cc377f059b91bf0eba3673036975f1ee": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: execl\nFull Name: execl\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"execl\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "execl",
+                "roles": [
+                    {
+                        "role": "SINK",
+                        "parameter_index": 4,
+                        "confidence": 0.9,
+                        "reason": "The fourth parameter 'data' is concatenated with a command 'ls ' and then passed to execl for execution, making it a direct command execution point.",
+                        "parameter_description": "待执行的系统命令字符串，包含用户输入的数据"
+                    },
+                    {
+                        "role": "SOURCE",
+                        "parameter_index": -1,
+                        "confidence": 0.8,
+                        "reason": "The 'data' variable is filled with user input received from a socket connection, making the function's return value (indirectly through 'data') a source of untrusted data.",
+                        "parameter_description": "通过socket接收的用户输入数据"
+                    }
+                ]
+            }
+        }
+    },
+    "b7554e011cd9088c79485ae7b1da4ccd": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: strcat\nFull Name: strcat\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n\n    strcat(data, \"*.*\");\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"strcat\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strcat",
+                "roles": [
+                    {
+                        "role": "SOURCE",
+                        "parameter_index": 2,
+                        "confidence": 0.9,
+                        "reason": "The second parameter of strcat is concatenated to the first parameter, which is later used in a command execution. If the second parameter contains untrusted data, it could lead to command injection.",
+                        "parameter_description": "String to be appended to the destination string, potentially containing untrusted data."
+                    }
+                ]
+            }
+        }
+    },
+    "7333d50523330dd38fac0ef99ef6090c": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: srand\nFull Name: srand\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n\n    srand( (unsigned)time(NULL) );\n\n    printLine(\"Calling good()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\n    printLine(\"Finished good()\");\n\n\n    printLine(\"Calling bad()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\n    printLine(\"Finished bad()\");\n\n    return 0;\n}\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"srand\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "srand",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "srand函数用于设置随机数生成器的种子，其参数是一个无符号整数，通常用于初始化随机数生成器，与命令注入无关。",
+                        "parameter_description": "随机数生成器的种子值"
+                    }
+                ]
+            }
+        }
+    },
+    "f1a4a43531e70b5a7b2376a10d42a918": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析给定的函数，判断其在命令注入攻击链中的角色，并精确定位具体的参数或返回值。\n\n    角色定义：\n    1. SOURCE: 可能引入不受信任数据的函数或参数\n    - 用户输入函数（如scanf, fgets, getchar等）\n    - 命令行参数（如argv）\n    - 环境变量获取（如getenv）\n    - 网络数据接收（如recv, read等）\n    - 文件读取函数\n\n    2. SINK: 可能执行OS命令的危险函数或参数\n    - 直接命令执行（如system, exec系列函数）\n    - 管道操作（如popen）\n    - 脚本解释器调用\n\n    3. SANITIZER: 可以清理/验证数据以防止命令注入的函数\n    - 输入验证函数\n    - 命令转义函数（如escapeshellarg）\n    - 白名单过滤函数\n    - 参数清理函数\n\n    4. NONE: 与命令注入无关的函数\n\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下函数：\n\n    Function Name: time\nFull Name: time\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: (unsigned)time(NULL)\n\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"function_name\": \"time\",\n            \"roles\": [\n                {\n                    \"role\": \"SOURCE|SINK|SANITIZER|NONE\",\n                    \"parameter_index\": \"具体的参数索引（必填！）\",\n                    \"confidence\": \"置信度（0.0-1.0）\",\n                    \"reason\": \"判断理由，必须说明为什么这个具体参数是source/sink点\",\n                    \"parameter_description\": \"参数描述（如'用户输入的命令字符串'、'待执行的系统命令'等）\"\n                }\n            ]\n        }\n    }\n\n    **关键分析要求：**\n    1. **精确定位参数**：不能只说函数是source/sink，必须明确指出哪个参数是source/sink点\n    2. **参数索引准确性**：仔细分析函数签名，确保参数索引正确\n    3. **多角色识别**：一个函数可能同时是source和sink（如某些参数是输入，某些参数是输出）\n    4. **置信度要求**：只返回置信度 >= 0.6 的结果\n    5. **详细说明**：在reason中明确说明为什么该参数是source/sink点\n\n    **示例分析思路：**\n    - `system(char* command)` → SINK, parameter_index: 1 (第一个参数command是执行点)\n    - `fgets(char* str, int size, FILE* stream)` → SOURCE, parameter_index: 1 (第一个参数str接收用户输入)\n    - `scanf(\"%s\", buffer)` → SOURCE, parameter_index: 2 (第二个参数buffer接收用户输入)\n    - `char* getenv(const char* name)` → SOURCE, parameter_index: -1 (返回值包含环境变量)\n    - `execl(const char* path, const char* arg0, ...)` → SINK, parameter_index: 1 (第一个参数path是执行的命令路径)\n\n    **特别注意：**\n    - 对于variadic函数（如printf, execl），要考虑所有相关参数\n    - 对于缓冲区操作函数，要区分输入缓冲区和输出缓冲区\n    - 对于包装函数，要分析实际的数据流向"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "time",
+                "roles": [
+                    {
+                        "role": "NONE",
+                        "parameter_index": "1",
+                        "confidence": "1.0",
+                        "reason": "The 'time' function is used to get the current calendar time as a value of type time_t. It does not involve any user input or command execution, making it irrelevant to command injection vulnerabilities.",
+                        "parameter_description": "Pointer to a time_t object where the time value will be stored, or NULL."
+                    }
+                ]
+            }
+        }
+    },
+    "b03982fc05e77dc6e577b440ef914527": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n请分析以下数据流路径，判断其是否可能导致命令注入漏洞。\n\n分析要求：\n1. 重点关注数据流中的源（source）和汇聚点（sink）。\n2. 如果数据流中存在清理函数（sanitizer），请判断该函数是否可以绕过。\n3.从source点开始，跟踪漏洞的数据流，并一步步的进行分析。\n3. 提供分析的置信度和理由。\n\n请返回一个JSON对象，包含以下字段：\n{\n    \"analysis_result\": {\n        \"is_vulnerable\": true|false,  # 是否存在漏洞\n        \"confidence\": \"置信度（0.0-1.0）\",\n        \"reason\": \"判断理由\",\n        \"sanitizers\": [\"清理函数列表\"]\n    }\n}\n"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下数据流路径：\n\n源（source）：data\n汇聚点（sink）：p4\n\n数据流路径：\nvoid CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "is_vulnerable": true,
+                "confidence": 0.9,
+                "reason": "The data from the socket is directly used in the 'execl' function without proper sanitization, which can lead to OS command injection. The only sanitization performed is removing carriage returns and newlines, which is insufficient to prevent command injection.",
+                "sanitizers": [
+                    "strchr"
+                ]
+            }
+        }
+    },
+    "355a024bc3ba300fc966c56c2873b38a": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n请分析以下数据流路径，判断其是否可能导致命令注入漏洞。\n\n分析要求：\n1. 重点关注数据流中的源（source）和汇聚点（sink）。\n2. 如果数据流中存在清理函数（sanitizer），请判断该函数是否可以绕过。\n3.从source点开始，跟踪漏洞的数据流，并一步步的进行分析。\n3. 提供分析的置信度和理由。\n\n请返回一个JSON对象，包含以下字段：\n{\n    \"analysis_result\": {\n        \"is_vulnerable\": true|false,  # 是否存在漏洞\n        \"confidence\": \"置信度（0.0-1.0）\",\n        \"reason\": \"判断理由\",\n        \"sanitizers\": [\"清理函数列表\"]\n    }\n}\n"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下数据流路径：\n\n源（source）：data\n汇聚点（sink）：p4\n\n数据流路径：\n\n"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "is_vulnerable": false,
+                "confidence": 0.0,
+                "reason": "未提供足够的信息来进行分析，如数据流路径的具体细节、清理函数的存在与否等。",
+                "sanitizers": []
+            }
+        }
+    },
+    "9a3ed44375e44ad8edb8891026c7e274": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n请分析以下数据流路径，判断其是否可能导致命令注入漏洞。\n\n分析要求：\n1. 重点关注数据流中的源（source）和汇聚点（sink）。\n2. 如果数据流中存在清理函数（sanitizer），请判断该函数是否可以绕过。\n3.从source点开始，跟踪漏洞的数据流，并一步步的进行分析。\n3. 提供分析的置信度和理由。\n\n请返回一个JSON对象，包含以下字段：\n{\n    \"analysis_result\": {\n        \"is_vulnerable\": true|false,  # 是否存在漏洞\n        \"confidence\": \"置信度（0.0-1.0）\",\n        \"reason\": \"判断理由\",\n        \"sanitizers\": [\"清理函数列表\"]\n    }\n}\n"
+            },
+            {
+                "role": "user",
+                "content": "请分析以下数据流路径：\n\n源（source）：None\n汇聚点（sink）：p4\n\n数据流路径：\n\n"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "is_vulnerable": false,
+                "confidence": 0.0,
+                "reason": "No source provided for analysis",
+                "sanitizers": []
+            }
+        }
+    }
+}

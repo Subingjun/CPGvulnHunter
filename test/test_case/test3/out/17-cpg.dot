@@ -1,0 +1,9 @@
+digraph "globalReturnsFalse" {  
+node [shape="rect"];  
+"111669149713" [label = <METHOD, 59<BR/>globalReturnsFalse> ]
+"25769803801" [label = <BLOCK<BR/>&lt;empty&gt;> ]
+"128849018897" [label = <METHOD_RETURN, 59<BR/>int> ]
+  "111669149713" -> "25769803801"  [ label = "AST: "] 
+  "111669149713" -> "128849018897"  [ label = "AST: "] 
+  "111669149713" -> "128849018897"  [ label = "CFG: "] 
+}

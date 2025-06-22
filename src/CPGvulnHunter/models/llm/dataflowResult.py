@@ -9,6 +9,8 @@ class VulnerabilityResult:
     数据流分析结果数据类
     用于存储数据流分析的结果信息
     """
+    source: str = None
+    sink: str = None
     is_vulnerable: bool = None
     confidence: float = None
     reason: str = None
@@ -19,6 +21,8 @@ class VulnerabilityResult:
         将VulnerabilityResult对象转换为字典
         """
         return {
+            "source": self.source,
+            "sink": self.sink,
             "is_vulnerable": self.is_vulnerable,
             "confidence": self.confidence,
             "reason": self.reason,

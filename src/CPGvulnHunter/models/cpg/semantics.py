@@ -94,6 +94,10 @@ class Semantic:
         flows_str = ', '.join(flow.toString() for flow in self.param_flows)
         return f"Semantic(method='{self.method}', param_flows=[{flows_str}], is_regex={self.is_regex})"
     
+
+
+
+
 @dataclass
 class Semantics:
     """一个cpg中所有外部函数的semantic规则"""
@@ -115,6 +119,7 @@ class Semantics:
         将Semantics转换为字符串表示
         """
         return f"Semantics(semantic_list=[{', '.join(semantic.toString() for semantic in self.semantic_list)}])"
+    
     def add_senmatic(self,semantic: Semantic) -> None:
         """
         添加单个语义规则
@@ -144,7 +149,16 @@ class Semantics:
         # 组合所有规则
         return "val extraFlows = List(" + ",\n".join(semantic_parts) + ")"
     
-
+    def to_dict(self) -> dict:
+        """
+        将 Semantics 转换为字典格式
+        
+        Returns:
+            dict: 包含语义规则的字典
+        """
+        return {
+            "semantic_list": [semantic.toString() for semantic in self.semantic_list]
+        }
 
 
 

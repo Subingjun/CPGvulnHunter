@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union, Tuple
 from abc import ABC, abstractmethod
 
+from CPGvulnHunter.core.config import ConfigManager
 from CPGvulnHunter.models.cpg.flowPath import DataFlowResult, FlowNode
 from CPGvulnHunter.models.cpg.function import Function, Parameter
 from CPGvulnHunter.models.cpg.joernQueryResult import JoernQueryResult
@@ -16,9 +17,10 @@ from .joernBridge import JoernBridge
 class JoernWrapper:
     """Joern交互包装器 - 封装所有Joern操作"""
     
-    def __init__(self, joern_path: str) -> None:
-        self.joern = JoernBridge(joern_path)
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+    def __init__(self) -> None:
+        self.joern_config = ConfigManager.get_joern_config()
+        self.joern = JoernBridge()
+        self.logger = logging.getLogger(__name__)
         # Ensure logger uses the level from config
         self.logger.setLevel(logging.getLogger().level)
         self._semantics_applied: bool = False
@@ -146,16 +148,15 @@ class JoernWrapper:
 
     def find_useage(self, function: Function) -> str:
         "查找函数调用点的使用情况"
-        result = function.generateUseageQuery()
-        match = re.search(r'"""(.*?)"""', result, re.DOTALL)
-        if match:
-            json_str = match.group(1)
-            useage_data = json.loads(json_str)
-            self.logger.debug(f"函数 {function.full_name} 的使用情况: {useage_data}")
-            return useage_data
+        #todo: 这里有很多的调用点，或许应该设计一种策略，让调用点和参数相关联？
+        query = function.generateUseageQuery()
+        result = self._execute_command(query)
+        if result is not None:
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
         else:
             self.logger.error(f"未找到函数 {function.full_name} 的使用情况")
-            return ''  
+            return ""
 
     # === 语义分析操作 ===
 

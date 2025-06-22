@@ -196,6 +196,7 @@ class Function:
         function_info += f"Signature: {self.signature or 'N/A'}\n"
         function_info += f"File: {self.filename or 'N/A'}\n"
         function_info += f"code: {self.code or 'N/A'}\n"
+        function_info += f"useage: {self.useage or 'N/A'}\n"
         return function_info
         
 
@@ -271,7 +272,7 @@ class Function:
         :param function: 函数对象
         :return: 查询命令字符串
         """
-        query = f'cpg.call.where(_.methodFullName("{self.full_name}")).argument({index}).l'
+        query = f'cpg.call.where(_.methodFullName("{self.full_name}")).argument({index}).ast.l'
         return query
 
     def findParameterIn(self,index) -> str:

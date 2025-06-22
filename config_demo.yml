@@ -1,0 +1,59 @@
+# CPGvulnHunter 统一配置文件
+project_name: "CPGvulnHunter"
+version: "1.0.0"
+debug_mode: false
+
+# LLM配置
+llm:
+  api_key: ""
+  base_url: ""
+  model: "deepseek-chat"
+  temperature: 0.1
+  max_tokens: 4096
+  timeout: 30
+  cache_enabled: true
+  cache_file: "./llm_cache/llm_cache.json"
+
+# Joern配置
+joern:
+  #joern的安装路径，这里必须使用我修改过的joern。
+  installation_path: ""
+  timeout: 300
+  server_endpoint: "localhost:8080"
+  cpg_var: "cpg"
+
+
+# Engine核心配置
+engine:
+  max_call_depth: 20
+  timeout_per_pass: 300
+  parallel_execution: false
+  max_functions: 1000
+  output_dir: "output"
+  save_intermediate_results: true
+  report_format: "json"
+  pass_config:
+    cwe78:
+      confidence_threshold: 0.6
+      max_sources: 50
+      max_sinks: 50
+  pass_registry:
+      init: "CPGvulnHunter.passes.initPass.InitPass"
+      cwe78: "CPGvulnHunter.passes.cwe78.CWE78"
+  enabled_passes: ["init", "cwe78"]
+# 漏洞检测配置
+vulnerability_detection:
+  timeout: 300
+  confidence_threshold: 0.6
+  max_paths: 100
+  enable_path_optimization: true
+  cwe_types: ["CWE-78"]
+
+# 日志配置
+logging:
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  console: true
+  file: "logs/cpgvulnhunter.log"
+  max_file_size: "10MB"
+  backup_count: 5

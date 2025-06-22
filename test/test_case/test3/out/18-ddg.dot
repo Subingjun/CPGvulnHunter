@@ -1,0 +1,4 @@
+digraph "globalReturnsTrue" {  
+node [shape="rect"];  
+
+}

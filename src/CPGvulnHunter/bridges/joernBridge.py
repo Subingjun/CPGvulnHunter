@@ -8,6 +8,8 @@ import time
 import threading
 from cpgqls_client import CPGQLSClient
 
+from CPGvulnHunter.core.config import ConfigManager, JoernConfig
+
 class JoernBridge:
     """
     与 Joern 服务器交互的桥接类（server-based版本）
@@ -18,57 +20,19 @@ class JoernBridge:
                  server_endpoint: str = "localhost:8080", 
                  auth_credentials: Optional[Tuple[str, str]] = None) -> None:
         """
-        初始化 JoernBridge
-        
-        Args:
-            joern_path: 保留为了兼容性，但在server模式下不使用
-            timeout: 命令超时时间（秒）
-            server_endpoint: Joern服务器端点，格式为 "host:port"
-            auth_credentials: 认证凭据，格式为 (username, password)
+        直接从config中获取Joern配置
         """
-        self.joern_path: str = joern_path  # 保留为了兼容性
-        self.timeout: int = timeout
-        self.server_endpoint: str = server_endpoint
-        self.auth_credentials: Optional[Tuple[str, str]] = auth_credentials
-        
-        self._client: Optional[CPGQLSClient] = None
-        self._lock: threading.Lock = threading.Lock()
-        self._last_activity: float = time.time()
+        self.joern_config:JoernConfig = ConfigManager().get_joern_config()
+        self.joern_path: str = self.joern_config.installation_path  # 保留为了兼容性
+        self.timeout: int = self.joern_config.timeout
+        self.server_endpoint: str = self.joern_config.server_endpoint
         self._connected: bool = False
-        
-        # 调试相关
-        self._debug_mode = False
-        self._command_history = []
-        
-        self._setup_logging()
+        self.logger = logging.getLogger(__name__)
         self._init_joern_server()
+        self._command_history= []  # 存储命令历史
+ 
 
-    def _setup_logging(self) -> None:
-        """设置日志记录"""
-        self.logger: logging.Logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('[%(levelname)s] %(name)s: %(message)s')
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
-            # Ensure logger uses the level from config
-            self.logger.setLevel(logging.getLogger().level)
 
-    def enable_debug(self, debug_file: str = None):
-        """启用调试模式"""
-        self._debug_mode = True
-        if debug_file:
-            # 可以添加文件日志记录
-            file_handler = logging.FileHandler(debug_file)
-            file_formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
-            file_handler.setFormatter(file_formatter)
-            self.logger.addHandler(file_handler)
-        self.logger.info("调试模式已启用")
-
-    def _debug_log(self, message: str) -> None:
-        """调试日志"""
-        if self._debug_mode:
-            self.logger.debug(message)
 
     def _init_joern_server(self) -> None:
         """
@@ -80,7 +44,6 @@ class JoernBridge:
             # 创建客户端连接
             self._client = CPGQLSClient(
                 server_endpoint=self.server_endpoint,
-                auth_credentials=self.auth_credentials
             )
             
             # 测试连接
@@ -208,34 +171,26 @@ class JoernBridge:
         if len(self._command_history) > 100:
             self._command_history = self._command_history[-100:]
             
-        with self._lock:
-            try:
-                # 确保连接可用
-                self._ensure_connection()
+        try:
+            # 确保连接可用
+            self._ensure_connection()
+            
+            if not self._client:
+                raise RuntimeError("无法建立或维持Joern服务器连接")
+            
+            # 执行命令
+            response = self._client.execute(cmd)
+            self._last_activity = time.time()
+            
+            if response is None:
+                self.logger.error("服务器响应为空，可能是连接问题或命令错误")
+            # 解析响应
+            output = self._parse_server_response(response)
+            return output
                 
-                if not self._client:
-                    raise RuntimeError("无法建立或维持Joern服务器连接")
-                
-                # 发送命令到服务器
-                self._debug_log(f"发送命令到服务器: {cmd}")
-                
-                # 执行命令
-                response = self._client.execute(cmd)
-                self._last_activity = time.time()
-                
-                self._debug_log(f"服务器响应: {response}")
-                if response is None:
-                    self.logger.error("服务器响应为空，可能是连接问题或命令错误")
-                # 解析响应
-                output = self._parse_server_response(response)
-                self._debug_log(f"解析后输出: {repr(output)}")
-                return output
-                    
-            except Exception as e:
-                self.logger.error(f"命令执行出错: {e}")
-                self._debug_log(f"命令执行异常: {e}")
-                self._debug_log(f"连接状态: {self._is_connected()}")
-                raise RuntimeError(f"命令执行失败: {e}")
+        except Exception as e:
+            self.logger.error(f"命令执行出错: {e}")
+            raise RuntimeError(f"命令执行失败: {e}")
 
    
 
@@ -268,7 +223,6 @@ class JoernBridge:
             "last_activity": self._last_activity,
             "uptime": time.time() - self._last_activity if self._is_connected() else 0,
             "command_count": len(self._command_history),
-            "debug_mode": self._debug_mode,
             "connection_type": "server"  # 标识这是server版本
         }
 

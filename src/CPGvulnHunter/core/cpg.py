@@ -13,8 +13,6 @@ from CPGvulnHunter.models.cpg.semantics import Semantics
 from CPGvulnHunter.core.config import UnifiedConfig
 from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 
-
-@dataclass
 class CPG:
     """
     代码属性图（Code Property Graph）数据类
@@ -25,35 +23,33 @@ class CPG:
     # === 核心必需字段 ===
     src_path: str
     
-    # === 统一配置 ===
-    config: Optional[UnifiedConfig] = None
-    
     # === wrapper ===
     llm_wrapper: Optional[LLMWrapper] = None
     joern_wrapper: Optional[JoernWrapper] = None
 
     # === 数据容器字段 ===
-    functions: List[Function] = field(default_factory=list)
-    external_functions: List[Function] = field(default_factory=list)
-    internal_functions: List[Function] = field(default_factory=list)
-    operator_functions: List[Function] = field(default_factory=list)
-    function_fullName_list: List[str] = field(default_factory=list)
-    functions_info :dict[str:list[str]] = field(default_factory=dict)  # 用于存储函数的详细信息，键为函数全名，值为函数对象
+    functions: List[Function] = []
+    external_functions: List[Function] = []
+    internal_functions: List[Function] = []
+    operator_functions: List[Function] = []
+    function_fullName_list: List[str] = []
+    functions_info :dict[str:list[str]] = {}# 用于存储函数的详细信息，键为函数全名，值为函数对象
     # === 语义分析字段 ===
-    external_semantics: Semantics = field(default_factory=Semantics)
+    external_semantics: Semantics = None
     
     # === 元数据字段 ===
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = None
     
     cpg_var: str = "cpg"  # 初始化 cpg_var 属性，默认值为 "cpg"
     
 
-
-    
-    def __post_init__(self):
-        """初始化后处理"""
+    def __init__(self, src_path: str,llm_wrapper: Optional[LLMWrapper] = None, joern_wrapper: Optional[JoernWrapper] = None):
+        self.src_path = src_path
+        self.logger = logging.getLogger(__name__)
+        self.llm_wrapper = llm_wrapper
+        self.joern_wrapper = joern_wrapper
         # 设置日志记录器
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.logger = logging.getLogger(__name__)
         
         # Ensure logger uses the level from config
         self.logger.info(f"开始初始化CPG - 源路径: {self.src_path}")
@@ -63,24 +59,6 @@ class CPG:
         if not src_path_obj.exists():
             self.logger.error(f"源代码路径不存在: {self.src_path}")
             raise FileNotFoundError(f"源代码路径不存在: {self.src_path}")
-        
-        # 初始化 Joern 包装器
-        self.logger.info(f"初始化Joern包装器 - 安装路径: {self.config.joern.installation_path}")
-        try:
-            self.joern_wrapper = JoernWrapper(self.config.joern.installation_path)
-            self.logger.info("Joern包装器初始化成功")
-        except Exception as e:
-            self.logger.error(f"Joern包装器初始化失败: {e}")
-            raise
-            
-        # 初始化 LLM 包装器
-        self.logger.info(f"初始化LLM包装器 - 模型: {self.config.llm.model}")
-        try:
-            self.llm_wrapper = LLMWrapper(self.config.llm)
-            self.logger.info("LLM包装器初始化成功")
-        except Exception as e:
-            self.logger.error(f"LLM包装器初始化失败: {e}")
-            raise
             
         # 导入代码到Joern
         self.logger.info("开始导入代码到Joern创建CPG...")
@@ -106,17 +84,7 @@ class CPG:
         self.logger.debug(f"函数全名列表: {self.function_fullName_list}... (总计: {len(self.function_fullName_list)})")
         self.logger.debug(f"cpg_var 初始化为: {self.cpg_var}")
     
-    @classmethod
-    def from_config_file(cls, src_path: str, config: UnifiedConfig, **kwargs) -> 'CPG':
-        """从配置文件创建 CPG 实例"""
-        
-        # 应用kwargs覆盖
-        if kwargs:
-            # 可以在这里处理特定的kwargs覆盖逻辑
-            logging.info(f"应用额外配置覆盖: {kwargs}")
-        
-        return cls(src_path=src_path, config=config, **kwargs)
-
+    
     def _get_all_functions(self) :
         joern_wrapper = self.joern_wrapper
         if not joern_wrapper:

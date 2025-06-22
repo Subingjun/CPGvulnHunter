@@ -1,0 +1,872 @@
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+
+
+请分析以下数据流路径：
+
+源（source）：data
+汇聚点（sink）：p4
+
+数据流路径：
+void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()
+{
+    char * data;
+    char dataBuffer[100] = "ls ";
+    data = dataBuffer;
+    {
+
+
+
+
+        int recvResult;
+        struct sockaddr_in service;
+        char *replace;
+        int connectSocket = -1;
+        size_t dataLen = strlen(data);
+        do
+        {
+# 90 "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
+            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (connectSocket == -1)
+            {
+                break;
+            }
+            memset(&service, 0, sizeof(service));
+            service.sin_family = AF_INET;
+            service.sin_addr.s_addr = inet_addr("127.0.0.1");
+            service.sin_port = htons(27015);
+            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)
+            {
+                break;
+            }
+
+
+
+            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);
+            if (recvResult == -1 || recvResult == 0)
+            {
+                break;
+            }
+
+            data[dataLen + recvResult / sizeof(char)] = '\0';
+
+            replace = strchr(data, '\r');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+            replace = strchr(data, '\n');
+            if (replace)
+            {
+                *replace = '\0';
+            }
+        }
+        while (0);
+        if (connectSocket != -1)
+        {
+            close(connectSocket);
+        }
+
+
+    }
+
+
+    execl("/bin/sh", "/bin/sh", "-c", data, NULL);
+}
+
+请分析以下数据流路径：
+
+源（source）：None
+汇聚点（sink）：p4
+
+数据流路径：
+
+

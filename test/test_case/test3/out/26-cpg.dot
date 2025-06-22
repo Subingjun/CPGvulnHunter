@@ -1,0 +1,13 @@
+digraph "&lt;operator&gt;.alloc" {  
+node [shape="rect"];  
+"111669149722" [label = <METHOD<BR/>&lt;operator&gt;.alloc> ]
+"115964117016" [label = <PARAM<BR/>p1> ]
+"25769803810" [label = <BLOCK<BR/>&lt;empty&gt;> ]
+"128849018906" [label = <METHOD_RETURN<BR/>ANY> ]
+  "111669149722" -> "115964117016"  [ label = "AST: "] 
+  "111669149722" -> "25769803810"  [ label = "AST: "] 
+  "111669149722" -> "128849018906"  [ label = "AST: "] 
+  "111669149722" -> "128849018906"  [ label = "CFG: "] 
+  "115964117016" -> "128849018906"  [ label = "DDG: p1"] 
+  "111669149722" -> "115964117016"  [ label = "DDG: "] 
+}

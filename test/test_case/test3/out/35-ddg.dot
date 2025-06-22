@@ -1,0 +1,8 @@
+digraph "inet_addr" {  
+node [shape="rect"];  
+"111669149731" [label = <METHOD<BR/>inet_addr> ]
+"128849018915" [label = <METHOD_RETURN<BR/>ANY> ]
+"115964117031" [label = <PARAM<BR/>p1> ]
+  "115964117031" -> "128849018915"  [ label = "p1"] 
+  "111669149731" -> "115964117031" 
+}

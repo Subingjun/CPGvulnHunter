@@ -11,6 +11,56 @@ from CPGvulnHunter.passes.basePass import BasePass
 from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 
 
+class InitPassResult():
+    """
+    初始化Pass的结果数据类
+    用于存储InitPass的分析结果
+    存储的结果应该如下：
+    1. pass_name: str - Pass的名称
+    2. cpg所有的函数
+    3. cpg的外部函数
+    4. cpg的内部函数
+    5. cpg的操作符函数
+    6. 利用llm分析的函数数量
+    7. 生成的语义规则数量
+    8. 生成的语义规则
+    """
+    
+    def __init__(self, pass_name: str, cpg: CPG) -> None:
+        """
+        :param pass_name: Pass的名称
+        :param cpg: CPG对象
+        """
+        self.pass_name = pass_name
+        self.cpg = cpg
+        self.analyzed_functions_count = len(cpg.functions)
+        self.all_functions_count = len(cpg.functions)
+        self.external_functions = cpg.external_functions
+        self.internal_functions = cpg.internal_functions
+        self.operator_functions = cpg.operator_functions
+        self.all_functions = cpg.functions
+        self.external_functions_count = len(cpg.external_functions)
+        self.internal_functions_count = len(cpg.internal_functions)
+        self.operator_functions_count = len(cpg.operator_functions)
+        self.semantic_rules_count = len(cpg.external_semantics.semantic_list) if cpg.external_semantics else 0
+        self.semantics = cpg.external_semantics.to_dict() if cpg.external_semantics else {}
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将结果转换为字典格式"""
+        return {
+            "pass_name": self.pass_name,
+            "analyzed_functions_count": self.analyzed_functions_count,
+            "all_functions_count": self.all_functions_count,
+            "external_functions_count": self.external_functions_count,
+            "internal_functions_count": self.internal_functions_count,
+            "operator_functions_count": self.operator_functions_count,
+            "external_functions": [func.to_dict() for func in self.external_functions],
+            "internal_functions": [func.to_dict() for func in self.internal_functions],
+            "operator_functions": [func.to_dict() for func in self.operator_functions],
+            "semantic_rules_count": self.semantic_rules_count,
+            "semantic_rules": self.semantics
+        }
+
 class InitPass():
     """
     初始化Pass - 负责外部函数语义分析和应用
@@ -27,7 +77,7 @@ class InitPass():
         self.semantic_rules_count = 0
         self.analyzed_functions_count = 0
 
-    def apply_external_semantics(self):
+    def apply_semantics(self):
         """
         Apply semantics to external functions
         """
@@ -58,30 +108,16 @@ class InitPass():
         self.cpg.joern_wrapper.apply_semantics(self.cpg.external_semantics)
         self.logger.info(f"Generated {len(self.cpg.external_semantics.semantic_list)} semantic rules for external functions.")
 
-    def get_analysis_results(self) -> Dict[str, Any]:
+    def get_analysis_results(self) -> InitPassResult:
         """获取InitPass的分析结果"""
         # 收集外部函数信息
-        external_semantics_info = self.cpg.external_semantics.toString()
-    
-        result_info = {
-            'pass_name': self.name,
-            'analyzed_functions_count': self.analyzed_functions_count,
-            'semantic_rules_count': self.semantic_rules_count,
-            'semantic_rules': external_semantics_info,
-
-        }
-        
-        self.logger.info(f"InitPass分析结果: 分析了{self.analyzed_functions_count}个函数，生成了{self.semantic_rules_count}条语义规则")
-        return result_info
+        analysis_result = InitPassResult(self.name, self.cpg)
+        return analysis_result
 
     def _save_results(self,output_path:str) -> None:
         """保存分析结果到指定路径"""
         try:
-            analysis_results = self.get_analysis_results()
-
-            
-            # 生成时间戳文件夹（所有pass共享同一个时间戳文件夹）            
-            
+            analysis_results = self.get_analysis_results().to_dict()
             with open(output_path, 'w', encoding='utf-8') as f:
                 import json
                 json.dump(analysis_results, f, ensure_ascii=False, indent=4)
@@ -94,7 +130,7 @@ class InitPass():
         """执行InitPass分析"""
         self.logger.info(f"开始执行 {self.name}")
         # 应用外部函数语义分析
-        self.apply_external_semantics()
+        self.apply_semantics()
         self._save_results(output_path)
         # 保存分析结果
         self.logger.info(f"{self.name} 执行完成")

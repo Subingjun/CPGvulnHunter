@@ -9,19 +9,19 @@ llm:
   base_url: "https://api.deepseek.com"
   #api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjBjN2ZjYWI0LWNkYTctNDQ5MC04Y2VkLThmZDNjNDQ0ODM4MyJ9.EF4VyeqVO0rfgN5mpFWYYZEaarcOXSQ1vjw-UYVCfkI"
   model: "deepseek-chat"
-  temperature: 0.7
-  max_tokens: 2048
+  temperature: 0.1
+  max_tokens: 4096
   timeout: 30
+  cache_enabled: true
+  cache_file: "./llm_cache/llm_cache.json"
 
 # Joern配置
 joern:
   installation_path: "/home/nstl/data/vuln_hunter/heouJoern/joern/joern-cli/target/universal/stage/joern"
   timeout: 300
-  memory_limit: "8G"
+  server_endpoint: "localhost:8080"
   cpg_var: "cpg"
-  workspace_path: "workspace"
-  enable_cache: true
-  cache_dir: "cache"
+
 
 # Engine核心配置
 engine:
@@ -32,7 +32,6 @@ engine:
   output_dir: "output"
   save_intermediate_results: true
   report_format: "json"
-  enabled_passes: ["init"]
   pass_config:
     cwe78:
       confidence_threshold: 0.6

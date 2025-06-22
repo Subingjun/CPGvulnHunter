@@ -3,7 +3,7 @@ import json
 import re
 from typing import Union
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -126,7 +126,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -249,7 +249,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -372,7 +372,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -495,7 +495,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -618,7 +618,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -741,7 +741,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -864,7 +864,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -987,7 +987,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1110,7 +1110,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1233,7 +1233,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1356,7 +1356,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1479,7 +1479,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1602,7 +1602,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1725,7 +1725,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
@@ -1848,7 +1848,7 @@ def safe_json_loads(text: str) -> dict:
             raise
 
 
-def extract_json_block(text: str) -> Union[dict, list]:
+def extract_json(text: str) -> Union[dict, list]:
     """
     从文本中提取JSON内容，支持多种格式：
     1. 直接的JSON字符串
