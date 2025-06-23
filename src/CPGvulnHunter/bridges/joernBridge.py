@@ -610,6 +610,60 @@ class JoernBridge:
             self.logger.error(f"重连失败: {e}")
             raise RuntimeError(f"无法重新连接到Joern服务器: {e}")
 
+    def force_restart_server(self) -> bool:
+        """
+        强制重启Joern服务器（用于服务器崩溃后的恢复）
+        """
+        try:
+            self.logger.warning("强制重启Joern服务器...")
+            
+            # 重置连续超时计数
+            self._consecutive_timeouts = 0
+            
+            # 关闭现有连接
+            if self._client:
+                self._client = None
+            self._connected = False
+            
+            # 如果是我们启动的服务器，强制终止它
+            if self._server_started_by_us and self._server_process:
+                self.logger.info("强制终止当前Joern服务器进程...")
+                try:
+                    self._server_process.kill()
+                    self._server_process.wait(timeout=5)
+                except:
+                    pass
+                self._server_process = None
+                self._server_started_by_us = False
+            
+            # 解析端口并强制清理
+            host, port_str = self.server_endpoint.split(':')
+            port = int(port_str)
+            
+            # 强制终止占用端口的进程
+            self._kill_process_on_port(port)
+            
+            # 等待端口释放
+            time.sleep(5)
+            
+            # 重新设置Java环境和启动服务器
+            self._setup_java_environment()
+            
+            # 启动新服务器
+            if not self._start_joern_server():
+                self.logger.error("强制重启Joern服务器失败")
+                return False
+            
+            # 重新建立连接
+            self._init_joern_server()
+            
+            self.logger.info("Joern服务器强制重启成功")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"强制重启服务器失败: {e}")
+            return False
+
     def _restart_server(self) -> None:
         """
         重启Joern服务器（仅当服务器是由本程序启动时）

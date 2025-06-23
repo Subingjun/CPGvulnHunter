@@ -54,7 +54,7 @@ class JoernWrapper:
             elif any(keyword in command for keyword in ["dataFlow", "reachableBy", "flows"]):
                 command_timeout = 300  # 数据流查询使用5分钟超时
             else:
-                command_timeout = 10  # 一般查询使用3分钟超时
+                command_timeout = 60  # 一般查询使用1分钟超时
             
             self.logger.debug(f"使用超时时间: {command_timeout}秒")
             
@@ -71,6 +71,12 @@ class JoernWrapper:
         except Exception as e:
             error_msg = str(e)
             self.logger.error(f"命令执行异常: {error_msg}")
+            
+            # 检查是否是服务器崩溃
+            if "JOERN_SERVER_CRASHED" in error_msg:
+                self.logger.error("检测到Joern服务器崩溃，抛出特殊异常让上层处理")
+                # 重新抛出异常，让更上层的调用者处理
+                raise RuntimeError("JOERN_SERVER_CRASHED: Joern服务器连续超时，可能已崩溃") from e
             
             # 根据错误类型提供不同的建议
             if "timeout" in error_msg.lower() or "超时" in error_msg:
