@@ -55,12 +55,11 @@ class Task:
         self.logger.info(f"initPass执行完成，外部函数语义分析结果已保存到 {self.output_path}/initpass.json")
         
         # 执行所有指定的Pass
-        results = []
+        results = {}
         for pass_name in self.passes:
             result = self._execute_pass(pass_name)
-            results.append(result)
-        
-        self.logger.info("所有Pass执行完成")
+            results[pass_name] = result
+        return results
 
     def _execute_pass(self, pass_name: str):
             """
@@ -82,14 +81,13 @@ class Task:
 
                 # 执行pass
                 if hasattr(pass_instance, 'run'):
-                    pass_instance.run(self.output_path)
+                    result = pass_instance.run(self.output_path)
                 execution_time = time.time() - start_time
                 self.logger.info(f"Pass {pass_name} 执行成功，耗时: {execution_time:.2f}秒")
-                
+                return result
             except Exception as e:
                 execution_time = time.time() - start_time
                 error_msg = f"Pass {pass_name} 执行失败: {str(e)}"
                 self.logger.error(error_msg)
                 
                 
-

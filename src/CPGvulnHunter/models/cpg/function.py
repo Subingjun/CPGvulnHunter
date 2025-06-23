@@ -284,6 +284,15 @@ class Function:
         query = f'cpg.methodParameterIn.where(_.method.fullName("{self.full_name}")).index({index}).l'
         return query
 
+    def findArgumentIn(self,index) -> str:
+        """
+        在Joern中定位函数的参数节点
+        :param function: 函数对象
+        :return: 查询命令字符串
+        """
+        query = f'cpg.call("{self.full_name}").argument({index}).l'
+        return query
+    
 
     def findReturnValue(self) -> str:
         """

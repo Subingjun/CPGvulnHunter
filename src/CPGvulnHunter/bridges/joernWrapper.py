@@ -42,16 +42,47 @@ class JoernWrapper:
     # === 核心执行方法 ===
     
     def _execute_command(self, command: str, timeout: Optional[int] = None) -> dict | None:
-        """执行Joern命令的基础方法"""
+        """执行Joern命令的基础方法，支持自动重试和超时处理"""
         try:
             self.logger.debug(f"执行命令: {command}")
-            result = self.joern.send_command(command, timeout)
+            
+            # 根据命令类型设置不同的超时时间
+            if timeout is not None:
+                command_timeout = timeout
+            elif "importCode" in command:
+                command_timeout = 600  # 导入代码使用10分钟超时
+            elif any(keyword in command for keyword in ["dataFlow", "reachableBy", "flows"]):
+                command_timeout = 300  # 数据流查询使用5分钟超时
+            else:
+                command_timeout = 10  # 一般查询使用3分钟超时
+            
+            self.logger.debug(f"使用超时时间: {command_timeout}秒")
+            
+            result = self.joern.send_command(command, command_timeout)
             self.logger.debug(f"命令结果: {result}")
-            json_result = self._extract_json_data(result)
-            return json_result
+            
+            if result is not None:
+                json_result = self._extract_json_data(result)
+                return json_result
+            else:
+                self.logger.warning(f"命令返回空结果: {command}")
+                return None
+                
         except Exception as e:
             error_msg = str(e)
             self.logger.error(f"命令执行异常: {error_msg}")
+            
+            # 根据错误类型提供不同的建议
+            if "timeout" in error_msg.lower() or "超时" in error_msg:
+                self.logger.error(f"命令执行超时: {command}")
+                self.logger.error("建议：")
+                self.logger.error("1. 检查查询复杂度，尝试简化查询条件")
+                self.logger.error("2. 检查Joern服务器负载")
+                self.logger.error("3. 考虑分批处理或增加超时时间")
+            elif "连接" in error_msg or "connection" in error_msg.lower():
+                self.logger.error("连接问题，Joern服务器可能不稳定")
+                self.logger.error("建议：检查网络连接和服务器状态")
+            
             return None
     
     def _extract_json_data(self, raw_result: str) -> Optional[dict]:

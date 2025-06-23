@@ -26,7 +26,7 @@ class JoernConfig:
     memory_limit: str = "8G"
     cpg_var: str = "cpg"
     workspace_path: str = "workspace"
-    server_endpoint: str = None
+    server_endpoint: str = "localhost:8080"
 
 @dataclass
 class EngineConfig:

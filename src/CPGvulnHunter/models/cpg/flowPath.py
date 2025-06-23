@@ -210,6 +210,15 @@ class FlowNode:
         from dataclasses import asdict
         return asdict(self)
     
+    def to_humen_dict(self) -> Dict[str, Any]:
+        """将FlowNode转换为人类可读的字典格式"""
+        return {
+            "node_id": self.node_id,
+            "code": self.code,
+            "line_number": self.line_number,
+            "method_name": self.method_name,
+        }
+    
     def toJson(self, indent: Optional[int] = None) -> str:
         """
         将FlowNode对象转换为JSON字符串
@@ -239,13 +248,17 @@ class FlowNode:
 class FlowPath:
     """数据流路径，表示从源到汇的完整数据流"""
     def __init__(self, nodes: List[FlowNode], source=None, sink=None):
-        self.nodes = nodes
+        self.nodes :FlowNode= nodes
         self.source = source                  # 数据源
         self.sink = sink                      # 数据汇聚点
         
         if not self.nodes:
             logging.warning("FlowPath initialized with no nodes.")
 
+    def get_sink_method_name(self):
+        """这里获取的实际上是sink方法调用点的methodname"""
+        sink_name = self.nodes[-1].method_name
+        return sink_name
 
     def _get_function_chain(self) -> str:
         """获取路径中所有节点的函数调用链"""
@@ -263,7 +276,7 @@ class FlowPath:
     def to_dict(self) -> Dict[str, Any]:
         """将FlowPath转换为字典格式"""
         return {
-            "nodes": [node.to_dict() for node in self.nodes],
+            "nodes": [node.to_humen_dict() for node in self.nodes],
         }
 
     @classmethod

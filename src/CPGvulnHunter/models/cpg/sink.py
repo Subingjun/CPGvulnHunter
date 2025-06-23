@@ -67,7 +67,7 @@ class Sink(Function):
             if self.index == -1:
                 return self.findReturnValue()
             if self.index >0:
-                return self.findParameterIn(self.index)
+                return self.findArgumentIn(self.index)
             if self.index ==0:
                 #todo  面向对象语言的自身污染。
                 pass

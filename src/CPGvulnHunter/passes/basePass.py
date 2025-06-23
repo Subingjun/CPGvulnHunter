@@ -129,7 +129,8 @@ class BasePass(ABC):
                             is_vulnerable=llm_result.get('is_vulnerable', None),
                             confidence=llm_result.get('confidence', None),
                             reason=llm_result.get('reason', None),
-                            flowPath_code=flow._get_function_chain()
+                            flowPath_code=flow._get_function_chain(),
+                            flows=flow
                         )
                         self.vulnerabilitiesResults.append(analysis_result)
                         self.logger.info(f"数据流分析结果: {analysis_result}")
@@ -194,7 +195,7 @@ class BasePass(ABC):
         self.vuln_analysis()#污点分析结果交给大模型分析
         self._save_results(output_path)
         # 返回漏洞发现结果
-        return None
+        return self.get_analysis_results()
 
 
 

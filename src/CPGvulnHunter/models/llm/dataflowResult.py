@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import json
 
+from CPGvulnHunter.models.cpg.flowPath import FlowPath
+
 
 @dataclass
 class VulnerabilityResult:
@@ -15,18 +17,21 @@ class VulnerabilityResult:
     confidence: float = None
     reason: str = None
     flowPath_code: str = None
+    flows:FlowPath = None
 
     def to_dict(self):
         """
         将VulnerabilityResult对象转换为字典
         """
         return {
-            "source": self.source.name,
-            "sink": self.sink.name,
+            "source": self.source,
+            "sink": self.sink,
+            "vuln_function_name": self.flows.get_sink_method_name(),
             "is_vulnerable": self.is_vulnerable,
             "confidence": self.confidence,
             "reason": self.reason,
-            "flowPath_code": self.flowPath_code
+            "flowPath_code": self.flowPath_code,
+            "flowPath": self.flows.to_dict() if self.flows else None
         }
 
     def toJson(self, indent: Optional[int] = None) -> str:
@@ -42,7 +47,7 @@ class VulnerabilityResult:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent, default=str)
 
     @classmethod
-    def fromJson(cls, json_str: str) -> 'VulnerabilityResult':
+    def fromJson(cls, json_str: str,flowPath:FlowPath) -> 'VulnerabilityResult':
         """
         从JSON字符串创建VulnerabilityResult对象
         
@@ -53,7 +58,7 @@ class VulnerabilityResult:
             VulnerabilityResult: VulnerabilityResult对象实例
         """
         data = json.loads(json_str)
-        return cls(**data)
+        return cls(**data,flows=flowPath)
 
 
 
