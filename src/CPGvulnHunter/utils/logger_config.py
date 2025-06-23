@@ -7,53 +7,97 @@ import logging
 import logging.handlers
 from pathlib import Path
 from typing import Optional
+import inspect
 
 from CPGvulnHunter.core.config import LoggingConfig
 
 
 class LoggerConfigurator:
     """日志配置器类 - 负责根据配置设置整个应用程序的日志系统"""
-    
+    _initialized = False
+    _current_level = logging.INFO
+
+
     @staticmethod
     def setup_logging(logging_config: LoggingConfig) -> None:
-        """
-        根据配置设置日志系统
+        """根据配置设置日志系统"""
+        if LoggerConfigurator._initialized:
+            print("警告: 日志系统已经初始化")
+            return
         
-        Args:
-            logging_config: 日志配置对象
-        """
-        # 获取日志级别
         level = getattr(logging, logging_config.level.upper(), logging.INFO)
+        LoggerConfigurator._current_level = level
         
-        # 配置根日志记录器
+        # 配置根logger
         root_logger = logging.getLogger()
         root_logger.setLevel(level)
         
-        # 清除现有的处理器
+        # 清除现有处理器
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
         
-        # 创建格式化器
         formatter = logging.Formatter(logging_config.format)
         
-        # 配置控制台处理器
+        # 控制台处理器
         if logging_config.console:
             console_handler = logging.StreamHandler()
             console_handler.setLevel(level)
             console_handler.setFormatter(formatter)
             root_logger.addHandler(console_handler)
         
-        # 配置文件处理器
+        # 文件处理器
         if logging_config.file:
             LoggerConfigurator._setup_file_handler(
-                root_logger, 
-                logging_config.file, 
-                level, 
-                formatter,
-                logging_config.max_file_size,
+                root_logger, logging_config.file, level, 
+                formatter, logging_config.max_file_size, 
                 logging_config.backup_count
             )
+        
+        # 配置第三方库
+        LoggerConfigurator._configure_third_party_loggers()
+        
+        LoggerConfigurator._initialized = True
+        print(f"日志系统初始化完成，级别: {logging_config.level}")
     
+    @staticmethod
+    def set_global_log_level(level: str) -> None:
+        """简单设置全局日志级别"""
+        try:
+            log_level = getattr(logging, level.upper())
+        except AttributeError:
+            print(f"警告: 未知日志级别 '{level}'，使用 INFO")
+            log_level = logging.INFO
+        
+        LoggerConfigurator._current_level = log_level
+        
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        
+        for handler in root_logger.handlers:
+            handler.setLevel(log_level)
+        
+        print(f"全局日志级别已设置为: {level.upper()}")
+    
+
+    @staticmethod
+    def get_auto_logger() -> logging.Logger:
+        """自动获取调用者模块的logger"""
+        frame = inspect.currentframe()
+        try:
+            caller_frame = frame.f_back
+            module_name = caller_frame.f_globals.get('__name__', 'unknown')
+            return logging.getLogger(module_name)
+        finally:
+            del frame
+
+
+            
+    @staticmethod
+    def _configure_third_party_loggers() -> None:
+        """配置第三方库日志级别"""
+        for logger_name in ['urllib3', 'requests', 'websockets', 'httpx']:
+            logging.getLogger(logger_name).setLevel(logging.WARNING)
+
     @staticmethod
     def _setup_file_handler(root_logger: logging.Logger, 
                            log_file: str,

@@ -30,7 +30,7 @@ class JoernBridge:
         
         try:
             self.joern_config: JoernConfig = ConfigManager().get_joern_config()
-            self.joern_path: str = self.joern_config.installation_path if self.joern_config.installation_path else joern_path
+            self.joern_path: str = self.joern_config.installation_path 
             self.timeout: int = self.joern_config.timeout if self.joern_config.timeout else timeout
             self.server_endpoint: str = self.joern_config.server_endpoint if self.joern_config.server_endpoint else server_endpoint
         except Exception as e:

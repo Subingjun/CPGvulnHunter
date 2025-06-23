@@ -16,6 +16,7 @@ from CPGvulnHunter.core.passRegistry import PassRegistry
 class Task:
     "用于表示一次任务，该任务接收指定的源码，然后执行漏洞检测"
     def __init__(self, target_src_path: str,output_path:str,passes:list[str]=None):
+        self.log_config = ConfigManager.get_logging_config()
         self.taget_src_path = target_src_path
         self.passes = passes if passes is not None else []  # 默认空列表
         self.base_output_path = Path(output_path)  # 基础输出路径

@@ -21,12 +21,12 @@ class LLMConfig:
 @dataclass
 class JoernConfig:
     """Joern配置"""
-    installation_path: str = "joern"
+    installation_path: str = None
     timeout: int = 300
     memory_limit: str = "8G"
     cpg_var: str = "cpg"
     workspace_path: str = "workspace"
-    server_endpoint: str = "localhost:8080"
+    server_endpoint: str = None
 
 @dataclass
 class EngineConfig:
