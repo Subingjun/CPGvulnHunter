@@ -56,6 +56,7 @@ class VulnerabilityEngine:
     
 
     def run(self,src_path: str,passes:list[str]) :
+            
         task = Task(target_src_path=src_path, output_path=str(self.output_dir), passes=passes)
         return task.run()
         

@@ -4,6 +4,8 @@ from enum import Enum
 import json
 import logging
 import time
+import os
+from pathlib import Path
 
 from CPGvulnHunter.bridges.llmBridge import LLMBridge
 from CPGvulnHunter.core.config import ConfigManager
@@ -30,6 +32,16 @@ class LLMWrapper:
         self.logger = logging.getLogger(__name__)      
         self.logger.info("开始初始化LLM Wrapper...")
         self.config = ConfigManager.get_llm_config()
+        
+        # 初始化函数语义分析缓存
+        self._cache_file = Path("llm_cache/semantic_cache.json")
+        self._semantic_cache = {}  # key: function_signature, value: serialized Semantic
+        self._cache_hits = 0
+        self._cache_misses = 0
+        
+        # 加载持久化缓存
+        self._load_cache()
+        
         try:
             # 初始化LLM客户端
             self.logger.debug(f"LLM配置 - 模型: {self.config.model}, 基础URL: {self.config.base_url}")
@@ -43,6 +55,7 @@ class LLMWrapper:
             init_time = time.time() - start_time
             
             self.logger.info(f"LLM Wrapper初始化成功，耗时: {init_time:.2f}秒")
+            self.logger.info(f"语义缓存已加载，共 {len(self._semantic_cache)} 条记录")
             self.logger.debug(f"LLM客户端类型: {type(self.llm_client).__name__}")
             
         except Exception as e:
@@ -51,8 +64,101 @@ class LLMWrapper:
             self.logger.error(f"初始化错误堆栈: {traceback.format_exc()}")
             raise
 
-        
+    def _load_cache(self):
+        """
+        从文件加载持久化缓存
+        """
+        try:
+            if self._cache_file.exists():
+                with open(self._cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    self._semantic_cache = cache_data
+                    self.logger.info(f"成功加载缓存文件: {self._cache_file}, 包含 {len(self._semantic_cache)} 条记录")
+            else:
+                self.logger.info(f"缓存文件不存在，创建空缓存: {self._cache_file}")
+                # 确保缓存目录存在
+                self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+                self._semantic_cache = {}
+                
+        except Exception as e:
+            self.logger.error(f"加载缓存文件失败: {e}")
+            self._semantic_cache = {}
 
+    def _save_cache(self):
+        """
+        保存缓存到文件
+        """
+        try:
+            # 确保缓存目录存在
+            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self._cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self._semantic_cache, f, ensure_ascii=False, indent=2)
+                
+            self.logger.debug(f"缓存已保存到文件: {self._cache_file}, 包含 {len(self._semantic_cache)} 条记录")
+                
+        except Exception as e:
+            self.logger.error(f"保存缓存文件失败: {e}")
+
+    def _semantic_to_dict(self, semantic: Semantic) -> dict:
+        """
+        将Semantic对象序列化为字典
+        """
+        return {
+            'method': semantic.method,
+            'param_flows': [
+                {
+                    'from_param': flow.from_param,
+                    'to_param': flow.to_param
+                }
+                for flow in semantic.param_flows
+            ],
+            'is_regex': semantic.is_regex
+        }
+
+    def _dict_to_semantic(self, data: dict) -> Semantic:
+        """
+        将字典反序列化为Semantic对象
+        """
+        param_flows = []
+        for flow_data in data.get('param_flows', []):
+            param_flow = ParameterFlow(
+                from_param=flow_data['from_param'],
+                to_param=flow_data['to_param']
+            )
+            param_flows.append(param_flow)
+        
+        return Semantic(
+            method_full_name=data['method'],
+            param_flows=param_flows,
+            is_regex=data.get('is_regex', False)
+        )
+
+    def get_cache_stats(self) -> dict:
+        """
+        获取缓存统计信息
+        """
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0
+        
+        return {
+            'cache_size': len(self._semantic_cache),
+            'cache_hits': self._cache_hits,
+            'cache_misses': self._cache_misses,
+            'total_requests': total_requests,
+            'hit_rate': hit_rate,
+            'cache_file': str(self._cache_file)
+        }
+
+    def clear_cache(self):
+        """
+        清空缓存
+        """
+        self._semantic_cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._save_cache()
+        self.logger.info("缓存已清空")
 
     def analyze_external_functions(self, external_functions: List[Function]) -> Semantics:
         """
@@ -113,7 +219,7 @@ class LLMWrapper:
     def _analyze_single_external_function(self, func: Function) -> Optional[Semantic]:
         """
         分析单个外部函数并生成语义规则
-        
+        使用函数签名作为缓存key，支持持久化缓存
         :param func: 单个函数对象
         :return: 该函数的语义规则，失败时返回None
         """
@@ -122,8 +228,25 @@ class LLMWrapper:
             return None
             
         func_name = func.full_name
-        self.logger.debug(f"开始分析函数: {func_name}")
+        func_signature = func.get_sigenature()  # 使用函数签名作为缓存key
+        
+        # 检查缓存
+        if func_signature in self._semantic_cache:
+            self._cache_hits += 1
+            self.logger.info(f"函数 {func_name} 从缓存中获取分析结果 (签名: {func_signature})")
+            try:
+                cached_data = self._semantic_cache[func_signature]
+                semantic = self._dict_to_semantic(cached_data)
+                return semantic
+            except Exception as e:
+                self.logger.error(f"从缓存恢复语义规则失败: {e}，将重新分析")
+                # 缓存数据损坏，删除并重新分析
+                del self._semantic_cache[func_signature]
+        
+        self._cache_misses += 1
+        self.logger.debug(f"开始分析函数: {func_name} (签名: {func_signature})")
         self.logger.info(f"函数 {func_name} 的分析结果不在缓存中，开始构建LLM请求")
+        
         # 构建针对单个函数的提示词
         try:
             request = FunctionPrompt.build_semantic_analysis_request(func)
@@ -182,12 +305,21 @@ class LLMWrapper:
             confidence = analysis_result.get('confidence', 'unknown')
             reasoning = analysis_result.get('reasoning', '')
             
-            # 创建并返回语义规则
+            # 创建语义规则
             rule = Semantic(
                 func_name,
                 param_flows=param_flows,
                 is_regex=False
             )
+            
+            # 将结果缓存到文件
+            try:
+                semantic_dict = self._semantic_to_dict(rule)
+                self._semantic_cache[func_signature] = semantic_dict
+                self._save_cache()
+                self.logger.debug(f"函数 {func_name} 语义规则已缓存 (签名: {func_signature})")
+            except Exception as e:
+                self.logger.warning(f"缓存函数 {func_name} 语义规则失败: {e}")
             
             self.logger.info(f"函数 {func_name} 语义规则生成成功 - 参数流数量: {len(param_flows)}, 置信度: {confidence}")
             if reasoning:

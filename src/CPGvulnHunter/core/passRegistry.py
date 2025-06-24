@@ -7,7 +7,9 @@ from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 class PassRegistry:
     """Pass注册表 - 静态类，用于管理所有可用的分析pass"""
     
-    _registry: Dict[str, str] = {"init": "CPGvulnHunter.passes.initPass.InitPass","cwe78": "CPGvulnHunter.passes.cwe78.CWE78"}
+    _registry: Dict[str, str] = {"init": "CPGvulnHunter.passes.initPass.InitPass",
+                                 "cwe78": "CPGvulnHunter.passes.cwe78.CWE78",
+                                 "easyPass": "CPGvulnHunter.passes.easyPass.EasyPass"}
     _loaded_classes: Dict[str, Type[BasePass]] = {}
     _logger = None  # 延迟初始化
     

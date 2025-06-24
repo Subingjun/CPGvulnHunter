@@ -381,7 +381,7 @@ class JoernBridge:
  
     def send_command(self, cmd: str, timeout: Optional[int] = None) -> str |None:
         """
-        发送命令到Joern服务器并返回输出，支持超时重传
+        发送命令到Joern服务器并返回输出，简化的超时和重试逻辑
         
         Args:
             cmd: 要执行的命令
@@ -391,20 +391,10 @@ class JoernBridge:
             命令输出字符串
             
         Raises:
-            RuntimeError: 命令执行失败或超时
+            RuntimeError: 命令执行失败或超时，包含特殊的JOERN_SERVER_CRASHED异常
         """
         if not cmd.strip():
             return ""
-        
-        # 使用传入的超时时间或默认超时时间，但为复杂查询增加更长的超时
-        base_timeout = timeout if timeout is not None else self.timeout
-        
-        # 根据命令类型动态调整超时时间
-        if any(keyword in cmd.lower() for keyword in ['method', 'call', 'dataflow', 'sink', 'source']):
-            effective_timeout = max(base_timeout, 60)  # 复杂查询至少60秒
-            self.logger.debug(f"检测到复杂查询，超时时间调整为: {effective_timeout}秒")
-        else:
-            effective_timeout = base_timeout
         
         # 记录命令历史
         timestamp = time.time()
@@ -422,91 +412,58 @@ class JoernBridge:
         if len(self._command_history) > 100:
             self._command_history = self._command_history[-100:]
         
-        # 重试机制配置
-        max_retries = 2  # 减少重试次数，因为超时重试通常没有用
-        retry_delay = 3  # 增加重试间隔时间
+        # 简化的超时时间设置
+        effective_timeout = timeout if timeout is not None else self.timeout
+        if any(keyword in cmd.lower() for keyword in ['method', 'call', 'dataflow', 'sink', 'source']):
+            effective_timeout = max(effective_timeout, 60)  # 复杂查询至少60秒
         
-        for attempt in range(max_retries):
-            start_time = time.time()
-            try:
-                # 确保连接可用
-                self._ensure_connection()
-                
-                if not self._client:
-                    raise RuntimeError("无法建立或维持Joern服务器连接")
-                
-                self.logger.debug(f"执行命令 (尝试 {attempt + 1}/{max_retries}, 超时:{effective_timeout}s): {cmd}")
-                
-                # 使用超时执行命令
-                response = self._execute_with_timeout(cmd, effective_timeout)
-                duration = time.time() - start_time
-                
-                if response is not None:
-                    self._last_activity = time.time()
-                    # 成功执行，重置连续超时计数
-                    self._consecutive_timeouts = 0
-                    # 解析响应
-                    output = self._parse_server_response(response)
-                    self.logger.debug(f"命令执行成功，耗时: {duration:.2f}秒")
-                    return output
-                else:
-                    self.logger.warning(f"命令执行返回空结果，尝试 {attempt + 1}/{max_retries}")
-                    
-            except Exception as e:
-                duration = time.time() - start_time
-                error_msg = str(e)
-                is_timeout = "timeout" in error_msg.lower() or "超时" in error_msg or "TimeoutError" in error_msg
-                
-                if is_timeout:
-                    self._consecutive_timeouts += 1
-                    self.logger.warning(f"命令执行超时 (尝试 {attempt + 1}/{max_retries}，连续超时: {self._consecutive_timeouts}次，耗时: {duration:.2f}秒): {cmd}")
-                    
-                    # 检查是否达到最大连续超时次数
-                    if self._consecutive_timeouts >= self._max_consecutive_timeouts:
-                        self.logger.error(f"连续超时达到 {self._max_consecutive_timeouts} 次，可能Joern服务器已崩溃")
-                        # 抛出特殊异常，让上层处理
-                        raise RuntimeError(f"JOERN_SERVER_CRASHED: 连续超时{self._consecutive_timeouts}次，服务器可能已崩溃")
-                    
-                    # 对于超时错误，如果是第一次，尝试发送简单命令测试连接
-                    if attempt == 0:
-                        try:
-                            test_response = self._execute_with_timeout("1+1", 5)
-                            if test_response:
-                                self.logger.info("连接正常，可能是查询过于复杂，增加超时时间")
-                                effective_timeout = min(effective_timeout * 2, 300)  # 最多5分钟
-                            else:
-                                self.logger.warning("连接测试失败，可能需要重连")
-                        except:
-                            self.logger.warning("连接测试异常，准备重连")
-                else:
-                    # 非超时错误，重置连续超时计数
-                    self._consecutive_timeouts = 0
-                    self.logger.warning(f"命令执行失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}")
-                
-                # 如果不是最后一次尝试，等待后重试
-                if attempt < max_retries - 1:
-                    self.logger.info(f"等待 {retry_delay} 秒后重试...")
-                    time.sleep(retry_delay)
-                    
-                    # 连接问题时尝试重新连接
-                    if is_timeout or "连接" in error_msg:
-                        try:
-                            self._reconnect()
-                        except Exception as reconnect_err:
-                            self.logger.error(f"重连失败: {reconnect_err}")
-                else:
-                    # 最后一次尝试也失败了
-                    if is_timeout:
-                        self.logger.error(f"命令持续超时，可能是服务器性能问题或查询过于复杂: {cmd}")
-                        raise RuntimeError(f"命令执行超时 (已重试{max_retries}次，最后超时时间:{effective_timeout}s): {cmd}")
-                    else:
-                        raise RuntimeError(f"命令执行失败 (已重试{max_retries}次): {error_msg}")
+        self.logger.debug(f"执行命令 (超时:{effective_timeout}s): {cmd}")
         
-        return None
+        try:
+            # 确保连接可用
+            self._ensure_connection()
+            
+            if not self._client:
+                raise RuntimeError("无法建立或维持Joern服务器连接")
+            
+            # 执行命令
+            response = self._execute_with_timeout(cmd, effective_timeout)
+            
+            if response is not None:
+                self._last_activity = time.time()
+                # 成功执行，重置连续超时计数
+                self._consecutive_timeouts = 0
+                output = self._parse_server_response(response)
+                self.logger.debug(f"命令执行成功")
+                return output
+            else:
+                raise RuntimeError("命令执行返回空结果")
+                
+        except Exception as e:
+            error_msg = str(e)
+            
+            # 检查是否为超时错误
+            if isinstance(e, TimeoutError) or "timeout" in error_msg.lower() or "超时" in error_msg:
+                self._consecutive_timeouts += 1
+                self.logger.warning(f"命令执行超时 (连续超时: {self._consecutive_timeouts}次): {cmd}")
+                
+                # 检查是否达到最大连续超时次数
+                if self._consecutive_timeouts >= self._max_consecutive_timeouts:
+                    self.logger.error(f"连续超时达到 {self._max_consecutive_timeouts} 次，判定Joern服务器已崩溃")
+                    # 抛出特殊异常，让上层Task处理
+                    raise RuntimeError(f"JOERN_SERVER_CRASHED: 连续超时{self._consecutive_timeouts}次，服务器可能已崩溃")
+                
+                # 重新抛出超时异常
+                raise RuntimeError(f"命令执行超时 (连续超时{self._consecutive_timeouts}次): {cmd}")
+            else:
+                # 非超时错误，重置连续超时计数
+                self._consecutive_timeouts = 0
+                self.logger.error(f"命令执行失败: {error_msg}")
+                raise RuntimeError(f"命令执行失败: {error_msg}")
 
     def _execute_with_timeout(self, cmd: str, timeout: int) -> Dict[str, Any] | None:
         """
-        使用超时机制执行命令
+        使用超时机制执行命令，修复版本
         
         Args:
             cmd: 要执行的命令
@@ -520,57 +477,53 @@ class JoernBridge:
             RuntimeError: 执行失败
         """
         import concurrent.futures
-        import signal
+        import threading
         
         def execute_command():
+            """内部执行函数"""
             try:
                 if not self._client:
                     raise RuntimeError("客户端连接未初始化")
                 
-                # 添加进度日志
                 self.logger.debug(f"开始执行命令: {cmd[:100]}...")
-                start_time = time.time()
-                
                 result = self._client.execute(cmd)
-                
-                duration = time.time() - start_time
-                self.logger.debug(f"命令执行完成，耗时: {duration:.2f}秒")
-                
+                self.logger.debug(f"命令执行完成")
                 return result
             except Exception as e:
                 self.logger.error(f"执行命令时出错: {e}")
                 raise
         
-        # 使用线程池执行命令
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(execute_command)
+        # 使用更简单的超时机制
+        result_container = [None]
+        exception_container = [None]
+        completed_event = threading.Event()
+        
+        def worker():
+            """工作线程函数"""
             try:
-                # 添加进度监控
-                check_interval = min(10, timeout // 4)  # 每隔1/4超时时间检查一次
-                elapsed = 0
-                
-                while elapsed < timeout:
-                    try:
-                        result = future.result(timeout=check_interval)
-                        return result
-                    except concurrent.futures.TimeoutError:
-                        elapsed += check_interval
-                        if elapsed < timeout:
-                            self.logger.debug(f"命令执行中... 已耗时: {elapsed}秒 / {timeout}秒")
-                        continue
-                
-                # 超时了
-                self.logger.error(f"命令执行超时 ({timeout}秒): {cmd}")
-                future.cancel()
-                raise TimeoutError(f"命令执行超时: {cmd}")
-                
-            except concurrent.futures.TimeoutError:
-                self.logger.error(f"命令执行超时 ({timeout}秒): {cmd}")
-                future.cancel()
-                raise TimeoutError(f"命令执行超时: {cmd}")
+                result = execute_command()
+                result_container[0] = result
             except Exception as e:
-                self.logger.error(f"命令执行异常: {e}")
-                raise RuntimeError(f"命令执行失败: {e}")
+                exception_container[0] = e
+            finally:
+                completed_event.set()
+        
+        # 启动工作线程
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+        
+        # 等待完成或超时
+        if completed_event.wait(timeout=timeout):
+            # 命令完成
+            if exception_container[0] is not None:
+                # 执行过程中出现异常
+                raise RuntimeError(f"命令执行失败: {exception_container[0]}")
+            return result_container[0]
+        else:
+            # 超时
+            self.logger.error(f"命令执行超时 ({timeout}秒): {cmd}")
+            # 注意：线程无法强制终止，只能等待它自然结束
+            raise TimeoutError(f"命令执行超时: {cmd}")
 
     def _reconnect(self) -> None:
         """
