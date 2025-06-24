@@ -1,2 +1,5 @@
 joern-cli/* filter=lfs diff=lfs merge=lfs -text
 joern-cli/** filter=lfs diff=lfs merge=lfs -text
+joern-cli/frontends/ghidra2cpg/lib/*.jar filter=lfs diff=lfs merge=lfs -text
+joern-cli/frontends/*/bin/astgen/* filter=lfs diff=lfs merge=lfs -text
+*.jar filter=lfs diff=lfs merge=lfs -text
