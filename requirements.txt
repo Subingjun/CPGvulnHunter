@@ -3,7 +3,7 @@ anyio==4.9.0
 certifi==2025.4.26
 charset-normalizer==3.4.2
 cpgqls-client==0.0.9
--e git+ssh://git@github.com/HeouDonkey/CPGvulnHunter.git@325fa9bb032b0b52f48352167c504d8f905fe07d#egg=CPGvulnHunter
+-e .
 distro==1.9.0
 h11==0.16.0
 httpcore==1.0.9
