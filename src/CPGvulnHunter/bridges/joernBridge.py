@@ -12,49 +12,228 @@ import socket
 from cpgqls_client import CPGQLSClient
 
 from CPGvulnHunter.core.config import ConfigManager, JoernConfig
+from CPGvulnHunter.models.execption.serverCrash import JoernTimeoutException
+from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+
+
 
 class JoernBridge:
     """
-    与 Joern 服务器交互的桥接类（server-based版本）
-    使用 cpgqls_client 与 Joern 服务器通信，替代原有的 pexpect shell 交互
+    Joern桥接类，用于与Joern服务器进行交互
+    主要暴露功能:拉起来joern服务器，然后向joern服务器发送命令并获取结果
+    关于joern server的周期管理，
     """
+    def __init__(self) -> None:
+        """
+        直接从config中获取Joern配置,这里不应该使用传参
+        """
+        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.joern_config: JoernConfig = ConfigManager().get_joern_config()
+        self.joern_path: str = self.joern_config.installation_path 
+        self.timeout: int = self.joern_config.timeout 
+        self.server_endpoint: str = self.joern_config.server_endpoint
+        self._server_process = None
+        self._last_activity = time.time()
+        self._client = None  
+        self._consecutive_timeouts = 0  
+        self._max_consecutive_timeouts = 3  
+        self.logger.info(f"初始化JoernBridge: joern_path={self.joern_path}, timeout={self.timeout}, server_endpoint={self.server_endpoint}")
+        self._setup_and_start_server()
+        self._test_connect()
     
-    def __init__(self, joern_path: str = "joern", timeout: int = 120, 
-                 server_endpoint: str = "localhost:8080", 
-                 auth_credentials: Optional[Tuple[str, str]] = None) -> None:
+    def __del__(self) -> None:
+        """析构函数，确保资源清理"""
+        try:
+            self._close_shell()
+        except:
+            pass
+
+
+#===================================================export methods=======================================================================
+    def send_command(self, cmd: str) -> str |None:
         """
-        直接从config中获取Joern配置
+        发送命令到Joern服务器并返回输出，超时直接判定为服务器崩溃
+        
+        Args:
+            cmd: 要执行的命令
+            timeout: 命令超时时间（秒），默认使用实例超时时间
+            
+        Returns:
+            命令输出字符串
+            
+        Raises:
+            RuntimeError: 命令执行失败，超时时直接抛出JOERN_SERVER_CRASHED异常
         """
-        # 首先初始化logger，因为其他方法都需要用到
-        self.logger = logging.getLogger(__name__)
+
+        # 记录命令历史
+        timestamp = time.time()
+        os.makedirs('logs', exist_ok=True)
+        with open('logs/joern_command_history.log', 'a', encoding='utf-8') as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))}] {cmd}\n")
         
         try:
-            self.joern_config: JoernConfig = ConfigManager().get_joern_config()
-            self.joern_path: str = self.joern_config.installation_path 
-            self.timeout: int = self.joern_config.timeout if self.joern_config.timeout else timeout
-            self.server_endpoint: str = self.joern_config.server_endpoint if self.joern_config.server_endpoint else server_endpoint
-        except Exception as e:
-            self.logger.warning(f"配置加载失败，使用默认参数: {e}")
-            # 使用传入的参数作为默认值
-            self.joern_path: str = joern_path
-            self.timeout: int = timeout
-            self.server_endpoint: str = server_endpoint
+            # 确保连接可用
+            self._ensure_connection()
             
-        self._connected: bool = False
-        self._server_process = None
-        self._server_started_by_us: bool = False
-        self._command_history = []  # 存储命令历史
-        self._last_activity = time.time()
-        self._client = None  # 初始化客户端为None
-        self._consecutive_timeouts = 0  # 连续超时计数
-        self._max_consecutive_timeouts = 3  # 最大连续超时次数
+            # 执行命令
+            response = self._execute_with_timeout(cmd, self.timeout)
+            
+            self._last_activity = time.time()
+            # 成功执行，重置连续超时计数
+            self._consecutive_timeouts = 0
+            output = self._parse_server_response(response)
+            self.logger.debug(f"命令执行成功")
+            return output
+                
+        except TimeoutError as e:
+            self.logger.error(f"命令执行超时，判定Joern服务器已崩溃: {cmd[:50]}...")
+            #由joernwrapper判断是否是服务器崩溃引起的，然后传递到engine中，重新执行task。
+            raise JoernTimeoutException(f"JOERN_SERVER_CRASHED: 命令执行超时，服务器可能已崩溃。",command=cmd, timeout=self.timeout) from e
+
+
+
+    def health_check(self) -> bool:
+        """
+        健康检查：验证Joern服务器是否正常工作
         
-        self.logger.info(f"初始化JoernBridge: joern_path={self.joern_path}, timeout={self.timeout}, server_endpoint={self.server_endpoint}")
+        Returns:
+            True if healthy, False otherwise
+        """
+        try:
+            # 发送简单的测试命令
+            result = self.send_command("1 + 1")
+            if result is not None and isinstance(result, str):
+                return "2" in result and not result.strip() == "=~"
+            return False
+        except Exception as e:
+            self.logger.warning(f"健康检查失败: {e}")
+            return False
+
+
+
+#===================================================private methods=======================================================================
+
+    def _execute_with_timeout(self, cmd: str, timeout: int) -> Dict[str, Any] | None:
+        """
+        使用超时机制执行命令，优化版本
         
-        # 自动启动Joern服务器
-        self._setup_and_start_server()
-        self._init_joern_server()
- 
+        Args:
+            cmd: 要执行的命令
+            timeout: 超时时间（秒）
+            
+        Returns:
+            命令执行结果
+            
+        Raises:
+            TimeoutError: 执行超时
+            RuntimeError: 执行失败
+        """
+        import concurrent.futures
+        import threading
+        
+        def execute_command():
+            """内部执行函数"""
+            try:
+                if not self._client:
+                    raise RuntimeError("客户端连接未初始化")
+                
+                self.logger.debug(f"开始执行命令: {cmd[:100]}...")
+                result = self._client.execute(cmd)
+                self.logger.debug(f"命令执行完成")
+                return result
+            except Exception as e:
+                self.logger.error(f"执行命令时出错: {e}")
+                raise
+        
+        result_container: List[Any] = [None]
+        exception_container: List[Optional[Exception]] = [None]
+        completed_event = threading.Event()
+        
+        def worker():
+            """工作线程函数"""
+            try:
+                result = execute_command()
+                result_container[0] = result
+            except Exception as e:
+                exception_container[0] = e
+            finally:
+                completed_event.set()
+        
+        # 启动工作线程
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+        
+        # 等待完成或超时
+        if completed_event.wait(timeout=timeout):
+            # 命令完成
+            if exception_container[0] is not None:
+                # 执行过程中出现异常
+                raise RuntimeError(f"命令执行失败: {exception_container[0]}")
+            return result_container[0]
+        else:
+            self.logger.error(f"命令执行超时 ({timeout}秒): {cmd[:100]}...")
+            raise TimeoutError(f"命令执行超时({timeout}s): {cmd[:50]}...")
+
+    def _setup_and_start_server(self) -> None:
+        """启动joernserver"""
+        try:
+            # 解析server endpoint
+            host, port_str = self.server_endpoint.split(':')
+            port = int(port_str)
+            
+            # 如果端口被占用，先尝试关闭占用端口的进程
+            if self._is_port_open(host, port):
+                self.logger.info(f"检测到端口 {port} 已被占用，尝试关闭占用进程...")
+                self._kill_process_on_port(port)
+                
+                # 等待端口释放
+                max_wait = 10
+                for i in range(max_wait):
+                    if not self._is_port_open(host, port):
+                        self.logger.info(f"端口 {port} 已释放")
+                        break
+                    time.sleep(1)
+                else:
+                    self.logger.warning(f"端口 {port} 仍被占用，强制启动新服务器")
+            
+            # 设置Java环境并启动服务器
+            self.logger.info("启动新的Joern服务器...")
+            self._setup_java_environment()
+            
+            if not self._start_joern_server():
+                raise RuntimeError("启动Joern服务器失败")
+                
+        except Exception as e:
+            self.logger.error(f"设置和启动服务器失败: {e}")
+            raise RuntimeError(f"无法启动Joern服务器: {e}")
+
+
+    def _close_shell(self) -> None:
+        """
+        关闭与Joern服务器的连接，如果server是我们启动的则关闭它
+        """
+        try:
+            if self._client:
+                self.logger.info("关闭Joern服务器连接")
+                self._client = None
+                self._connected = False
+            
+            # 如果server是我们启动的，则关闭它
+            if self._server_started_by_us and self._server_process:
+                self.logger.info("关闭我们启动的joern server")
+                self._server_process.terminate()
+                try:
+                    self._server_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.logger.warning("joern server未正常退出，强制终止")
+                    self._server_process.kill()
+                    self._server_process.wait()
+                self._server_process = None
+                self._server_started_by_us = False
+                
+        except Exception as e:
+            self.logger.error(f"关闭连接时出错: {e}")
+
     def _is_port_open(self, host: str, port: int) -> bool:
         """检查端口是否开放"""
         try:
@@ -151,38 +330,7 @@ class JoernBridge:
         
         self.logger.info(f"设置JVM参数: {new_java_opts}")
 
-    def _setup_and_start_server(self) -> None:
-        """强制启动新的Joern服务器，不考虑端口占用"""
-        try:
-            # 解析server endpoint
-            host, port_str = self.server_endpoint.split(':')
-            port = int(port_str)
-            
-            # 如果端口被占用，先尝试关闭占用端口的进程
-            if self._is_port_open(host, port):
-                self.logger.info(f"检测到端口 {port} 已被占用，尝试关闭占用进程...")
-                self._kill_process_on_port(port)
-                
-                # 等待端口释放
-                max_wait = 10
-                for i in range(max_wait):
-                    if not self._is_port_open(host, port):
-                        self.logger.info(f"端口 {port} 已释放")
-                        break
-                    time.sleep(1)
-                else:
-                    self.logger.warning(f"端口 {port} 仍被占用，强制启动新服务器")
-            
-            # 设置Java环境并启动服务器
-            self.logger.info("启动新的Joern服务器...")
-            self._setup_java_environment()
-            
-            if not self._start_joern_server():
-                raise RuntimeError("启动Joern服务器失败")
-                
-        except Exception as e:
-            self.logger.error(f"设置和启动服务器失败: {e}")
-            raise RuntimeError(f"无法启动Joern服务器: {e}")
+  
 
 
     def _start_joern_server(self) -> bool:
@@ -261,7 +409,7 @@ class JoernBridge:
             self.logger.error(f"启动joern server失败: {e}")
             return False
 
-    def _init_joern_server(self) -> None:
+    def _test_connect(self) -> None:
         """
         建立与Joern服务器的连接
         """
@@ -287,31 +435,7 @@ class JoernBridge:
             self._connected = False
             raise RuntimeError(f"无法连接到Joern服务器: {e}")
 
-    def close_shell(self) -> None:
-        """
-        关闭与Joern服务器的连接，如果server是我们启动的则关闭它
-        """
-        try:
-            if self._client:
-                self.logger.info("关闭Joern服务器连接")
-                self._client = None
-                self._connected = False
-            
-            # 如果server是我们启动的，则关闭它
-            if self._server_started_by_us and self._server_process:
-                self.logger.info("关闭我们启动的joern server")
-                self._server_process.terminate()
-                try:
-                    self._server_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    self.logger.warning("joern server未正常退出，强制终止")
-                    self._server_process.kill()
-                    self._server_process.wait()
-                self._server_process = None
-                self._server_started_by_us = False
-                
-        except Exception as e:
-            self.logger.error(f"关闭连接时出错: {e}")
+
 
     def _is_connected(self) -> bool:
         """检查是否连接到服务器"""
@@ -321,7 +445,7 @@ class JoernBridge:
         """确保连接可用，如果断开则重连"""
         if not self._is_connected():
             self.logger.warning("检测到连接断开，尝试重新连接")
-            self._init_joern_server()
+            self._test_connect()
 
     def _clean_output(self, raw_output: str) -> str:
         """
@@ -379,323 +503,10 @@ class JoernBridge:
             return self._clean_output(stdout)
 
  
-    def send_command(self, cmd: str, timeout: Optional[int] = None) -> str |None:
-        """
-        发送命令到Joern服务器并返回输出，简化的超时和重试逻辑
-        
-        Args:
-            cmd: 要执行的命令
-            timeout: 命令超时时间（秒），默认使用实例超时时间
-            
-        Returns:
-            命令输出字符串
-            
-        Raises:
-            RuntimeError: 命令执行失败或超时，包含特殊的JOERN_SERVER_CRASHED异常
-        """
-        if not cmd.strip():
-            return ""
-        
-        # 记录命令历史
-        timestamp = time.time()
-        self._command_history.append({
-            'command': cmd,
-            'timestamp': timestamp
-        })
-        
-        # 记录到日志文件
-        os.makedirs('logs', exist_ok=True)
-        with open('logs/joern_command_history.log', 'a', encoding='utf-8') as f:
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))}] {cmd}\n")
-        
-        # 保持最近100条命令
-        if len(self._command_history) > 100:
-            self._command_history = self._command_history[-100:]
-        
-        # 简化的超时时间设置
-        effective_timeout = timeout if timeout is not None else self.timeout
-        if any(keyword in cmd.lower() for keyword in ['method', 'call', 'dataflow', 'sink', 'source']):
-            effective_timeout = max(effective_timeout, 60)  # 复杂查询至少60秒
-        
-        self.logger.debug(f"执行命令 (超时:{effective_timeout}s): {cmd}")
-        
-        try:
-            # 确保连接可用
-            self._ensure_connection()
-            
-            if not self._client:
-                raise RuntimeError("无法建立或维持Joern服务器连接")
-            
-            # 执行命令
-            response = self._execute_with_timeout(cmd, effective_timeout)
-            
-            if response is not None:
-                self._last_activity = time.time()
-                # 成功执行，重置连续超时计数
-                self._consecutive_timeouts = 0
-                output = self._parse_server_response(response)
-                self.logger.debug(f"命令执行成功")
-                return output
-            else:
-                raise RuntimeError("命令执行返回空结果")
-                
-        except Exception as e:
-            error_msg = str(e)
-            
-            # 检查是否为超时错误
-            if isinstance(e, TimeoutError) or "timeout" in error_msg.lower() or "超时" in error_msg:
-                self._consecutive_timeouts += 1
-                self.logger.warning(f"命令执行超时 (连续超时: {self._consecutive_timeouts}次): {cmd}")
-                
-                # 检查是否达到最大连续超时次数
-                if self._consecutive_timeouts >= self._max_consecutive_timeouts:
-                    self.logger.error(f"连续超时达到 {self._max_consecutive_timeouts} 次，判定Joern服务器已崩溃")
-                    # 抛出特殊异常，让上层Task处理
-                    raise RuntimeError(f"JOERN_SERVER_CRASHED: 连续超时{self._consecutive_timeouts}次，服务器可能已崩溃")
-                
-                # 重新抛出超时异常
-                raise RuntimeError(f"命令执行超时 (连续超时{self._consecutive_timeouts}次): {cmd}")
-            else:
-                # 非超时错误，重置连续超时计数
-                self._consecutive_timeouts = 0
-                self.logger.error(f"命令执行失败: {error_msg}")
-                raise RuntimeError(f"命令执行失败: {error_msg}")
 
-    def _execute_with_timeout(self, cmd: str, timeout: int) -> Dict[str, Any] | None:
-        """
-        使用超时机制执行命令，修复版本
-        
-        Args:
-            cmd: 要执行的命令
-            timeout: 超时时间（秒）
-            
-        Returns:
-            命令执行结果
-            
-        Raises:
-            TimeoutError: 执行超时
-            RuntimeError: 执行失败
-        """
-        import concurrent.futures
-        import threading
-        
-        def execute_command():
-            """内部执行函数"""
-            try:
-                if not self._client:
-                    raise RuntimeError("客户端连接未初始化")
-                
-                self.logger.debug(f"开始执行命令: {cmd[:100]}...")
-                result = self._client.execute(cmd)
-                self.logger.debug(f"命令执行完成")
-                return result
-            except Exception as e:
-                self.logger.error(f"执行命令时出错: {e}")
-                raise
-        
-        # 使用更简单的超时机制
-        result_container = [None]
-        exception_container = [None]
-        completed_event = threading.Event()
-        
-        def worker():
-            """工作线程函数"""
-            try:
-                result = execute_command()
-                result_container[0] = result
-            except Exception as e:
-                exception_container[0] = e
-            finally:
-                completed_event.set()
-        
-        # 启动工作线程
-        worker_thread = threading.Thread(target=worker, daemon=True)
-        worker_thread.start()
-        
-        # 等待完成或超时
-        if completed_event.wait(timeout=timeout):
-            # 命令完成
-            if exception_container[0] is not None:
-                # 执行过程中出现异常
-                raise RuntimeError(f"命令执行失败: {exception_container[0]}")
-            return result_container[0]
-        else:
-            # 超时
-            self.logger.error(f"命令执行超时 ({timeout}秒): {cmd}")
-            # 注意：线程无法强制终止，只能等待它自然结束
-            raise TimeoutError(f"命令执行超时: {cmd}")
 
-    def _reconnect(self) -> None:
-        """
-        重新建立与Joern服务器的连接
-        """
-        try:
-            self.logger.info("尝试重新连接到Joern服务器...")
-            
-            # 关闭现有连接
-            if self._client:
-                try:
-                    self._client = None
-                except:
-                    pass
-            
-            self._connected = False
-            
-            # 等待一段时间再重连
-            time.sleep(2)
-            
-            # 检查服务器是否还在运行
-            host, port_str = self.server_endpoint.split(':')
-            port = int(port_str)
-            
-            if not self._is_port_open(host, port):
-                self.logger.warning("Joern服务器端口不可达，尝试重启服务器...")
-                if self._server_started_by_us and self._server_process:
-                    # 如果是我们启动的服务器，重启它
-                    self._restart_server()
-                else:
-                    raise RuntimeError("Joern服务器不可达且非本程序启动")
-            
-            # 重新初始化连接
-            self._init_joern_server()
-            
-        except Exception as e:
-            self.logger.error(f"重连失败: {e}")
-            raise RuntimeError(f"无法重新连接到Joern服务器: {e}")
 
-    def force_restart_server(self) -> bool:
-        """
-        强制重启Joern服务器（用于服务器崩溃后的恢复）
-        """
-        try:
-            self.logger.warning("强制重启Joern服务器...")
-            
-            # 重置连续超时计数
-            self._consecutive_timeouts = 0
-            
-            # 关闭现有连接
-            if self._client:
-                self._client = None
-            self._connected = False
-            
-            # 如果是我们启动的服务器，强制终止它
-            if self._server_started_by_us and self._server_process:
-                self.logger.info("强制终止当前Joern服务器进程...")
-                try:
-                    self._server_process.kill()
-                    self._server_process.wait(timeout=5)
-                except:
-                    pass
-                self._server_process = None
-                self._server_started_by_us = False
-            
-            # 解析端口并强制清理
-            host, port_str = self.server_endpoint.split(':')
-            port = int(port_str)
-            
-            # 强制终止占用端口的进程
-            self._kill_process_on_port(port)
-            
-            # 等待端口释放
-            time.sleep(5)
-            
-            # 重新设置Java环境和启动服务器
-            self._setup_java_environment()
-            
-            # 启动新服务器
-            if not self._start_joern_server():
-                self.logger.error("强制重启Joern服务器失败")
-                return False
-            
-            # 重新建立连接
-            self._init_joern_server()
-            
-            self.logger.info("Joern服务器强制重启成功")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"强制重启服务器失败: {e}")
-            return False
 
-    def _restart_server(self) -> None:
-        """
-        重启Joern服务器（仅当服务器是由本程序启动时）
-        """
-        if not self._server_started_by_us or not self._server_process:
-            raise RuntimeError("无法重启非本程序启动的服务器")
-        
-        try:
-            self.logger.info("正在重启Joern服务器...")
-            
-            # 关闭现有服务器
-            self._server_process.terminate()
-            try:
-                self._server_process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self.logger.warning("服务器未正常退出，强制终止")
-                self._server_process.kill()
-                self._server_process.wait()
-            
-            # 等待端口释放
-            time.sleep(3)
-            
-            # 重新启动服务器
-            if not self._start_joern_server():
-                raise RuntimeError("重启Joern服务器失败")
-                
-        except Exception as e:
-            self.logger.error(f"重启服务器失败: {e}")
-            raise
 
-    def health_check(self) -> bool:
-        """
-        健康检查：验证Joern服务器是否正常工作
-        
-        Returns:
-            True if healthy, False otherwise
-        """
-        try:
-            # 发送简单的测试命令
-            result = self.send_command("1 + 1", timeout=10)
-            if result is not None and isinstance(result, str):
-                return "2" in result and not result.strip() == "=~"
-            return False
-        except Exception as e:
-            self.logger.warning(f"健康检查失败: {e}")
-            return False
 
-    def get_status(self) -> Dict[str, Any]:
-        """
-        获取桥接器状态信息
-        
-        Returns:
-            包含状态信息的字典
-        """
-        return {
-            "connected": self._is_connected(),
-            "server_endpoint": self.server_endpoint,
-            "timeout": self.timeout,
-            "last_activity": self._last_activity,
-            "uptime": time.time() - self._last_activity if self._is_connected() else 0,
-            "command_count": len(self._command_history),
-            "connection_type": "server"  # 标识这是server版本
-        }
 
-    def get_command_history(self) -> List[Dict[str, Any]]:
-        """获取命令历史"""
-        return self._command_history.copy()
-
-    def __del__(self) -> None:
-        """析构函数，确保资源清理"""
-        try:
-            self.close_shell()
-        except:
-            pass
-
-    def __enter__(self):
-        """上下文管理器进入"""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """上下文管理器退出"""
-        self.close_shell()

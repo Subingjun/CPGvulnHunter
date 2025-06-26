@@ -95,4 +95,3 @@ class LLMCacher:
         except:
             pass
 
-    # ...existing methods...

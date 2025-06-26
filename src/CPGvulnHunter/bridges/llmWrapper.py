@@ -14,6 +14,7 @@ from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import ParameterFlow, Semantic, Semantics
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.prompt import FunctionPrompt
+from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 
 
 
@@ -29,7 +30,7 @@ class LLMWrapper:
         """
         初始化LLM桥接器
         """
-        self.logger = logging.getLogger(__name__)      
+        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         self.logger.info("开始初始化LLM Wrapper...")
         self.config = ConfigManager.get_llm_config()
         

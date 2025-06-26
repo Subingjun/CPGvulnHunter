@@ -53,19 +53,46 @@ class VulnerabilityEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logger.debug(f"输出目录: {self.output_dir.absolute()}")
         self.logger.info("引擎初始化完成")
-    
 
     def run(self,src_path: str,passes:list[str]) :
-            
-        task = Task(target_src_path=src_path, output_path=str(self.output_dir), passes=passes)
-        return task.run()
+        for retry_count in range(self.engine_config.max_retries):
+            retry_count += 1
+            try:
+                task = Task(target_src_path=src_path, output_path=str(self.output_dir), passes=passes)
+                task.run()
+            except Exception as e:
+                self.logger.error(f"运行任务时发生错误: {e},尝试重启任务")
+                continue
+        raise RuntimeError("任务执行失败：超出最大重试次数")
+
+    def run_easy_pass(self, src_path: str) -> AnalysisResult:
+        """
+        """
+        task = Task(target_src_path=src_path, output_path=str(self.output_dir), passes=['easyPass'])
+        result = task.run(False)
+        return result
+
+    def batch_run(self, src_paths: List[str], passes: List[str]) -> List[AnalysisResult]:
+        """
+        批量运行漏洞分析
         
+        Args:
+            src_paths: 源代码路径列表
+            passes: 分析passes列表
+            
+        Returns:
+            AnalysisResult列表
+        """
+        results = []
+        for src_path in src_paths:
+            self.logger.info(f"开始分析源代码: {src_path}")
+            result = self.run(src_path, passes)
+            results.append(result)
+            self.logger.info(f"完成分析源代码: {src_path}")
+        return results
 
 
-
-if __name__ == "__main__":
-    # 示例：快速分析
-    
+if __name__ == "__main__":    
     src_path = "/home/nstl/data/CPGvulnHunter/test/test_case/test2"
     config_file = "/home/nstl/data/CPGvulnHunter/config.yml"
     engine = VulnerabilityEngine(config_file=config_file)

@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional, Union
 from openai import OpenAI
 
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
+from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 from CPGvulnHunter.utils.uitils import extract_json
 from CPGvulnHunter.utils.llmCacher import LLMCacher
 """
@@ -28,7 +29,7 @@ class LLMBridge:
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         self.cacher = LLMCacher(cache_file="./llm_cache/llm_cache.json")
         # Ensure logger uses the level from config
         self.logger.setLevel(logging.getLogger().level)

@@ -116,15 +116,12 @@ class InitPass():
 
     def _save_results(self,output_path:str) -> None:
         """保存分析结果到指定路径"""
-        try:
-            analysis_results = self.get_analysis_results().to_dict()
-            with open(output_path, 'w', encoding='utf-8') as f:
-                import json
-                json.dump(analysis_results, f, ensure_ascii=False, indent=4)
-            self.logger.info(f"pass {self.name} 分析结果已保存到 {output_path}")
-        except Exception as e:      
-            self.logger.error(f"保存分析结果失败: {e}")
-            raise RuntimeError(f"保存分析结果失败: {e}")
+        analysis_results = self.get_analysis_results().to_dict()
+        with open(output_path, 'w', encoding='utf-8') as f:
+            import json
+            json.dump(analysis_results, f, ensure_ascii=False, indent=4)
+        self.logger.info(f"pass {self.name} 分析结果已保存到 {output_path}")
+
 
     def run(self,output_path: Optional[Path] = None) -> None:
         """执行InitPass分析"""

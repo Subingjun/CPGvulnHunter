@@ -20,7 +20,8 @@ class BatchTestCWE78:
             print(f"正在分析测试目录: {testcase_dir}")
             # 先把所有的分析结果加到vuln_function字典中
             try:
-                result = VulnerabilityEngine(self.config_file).run(src_path=testcase_dir, passes=["cwe78"])
+                engine = VulnerabilityEngine(self.config_file)
+                result = engine.run(src_path=testcase_dir, passes=["cwe78"])
                 a = result.get("cwe78", {})
                 analysis_results :list = result.get("cwe78", {}).get('analysis_results', {})
                 for result in analysis_results:

@@ -26,7 +26,9 @@ class JoernConfig:
     memory_limit: str = "8G"
     cpg_var: str = "cpg"
     workspace_path: str = "workspace"
+    max_retries = 3
     server_endpoint: str = None
+    command_save_path: str = ""
 
 @dataclass
 class EngineConfig:
@@ -41,25 +43,19 @@ class EngineConfig:
     enabled_passes: List[str] = field(default_factory=lambda: ["init"])
     pass_config: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     pass_registry: Dict[str, str] = field(default_factory=dict)
+    max_retries = 3
+
 
 @dataclass
 class LoggingConfig:
     """日志配置"""
-    level: str = "INFO"
+    level: str = "DEBUG"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file: Optional[str] = None
     console: bool = True
     max_file_size: str = "10MB"
     backup_count: int = 5
 
-@dataclass
-class VulnerabilityDetectionConfig:
-    """漏洞检测配置"""
-    timeout: int = 300
-    confidence_threshold: float = 0.6
-    max_paths: int = 100
-    enable_path_optimization: bool = True
-    cwe_types: List[str] = field(default_factory=lambda: ["CWE-78"])
 
 class ConfigManager:
     """配置管理器单例类 - 直接管理所有配置"""
@@ -71,7 +67,6 @@ class ConfigManager:
     _joern_config: JoernConfig = None
     _engine_config: EngineConfig = None
     _logging_config: LoggingConfig = None
-    _vulnerability_detection_config: VulnerabilityDetectionConfig = None
     
     # 全局配置
     _project_name: str = "CPGvulnHunter"
@@ -105,7 +100,6 @@ class ConfigManager:
         cls._joern_config = JoernConfig()
         cls._engine_config = EngineConfig()
         cls._logging_config = LoggingConfig()
-        cls._vulnerability_detection_config = VulnerabilityDetectionConfig()
         logging.info("使用默认配置初始化")
     
     @classmethod
@@ -134,7 +128,6 @@ class ConfigManager:
         cls._load_joern_config(config_data)
         cls._load_engine_config(config_data)
         cls._load_logging_config(config_data)
-        cls._load_vulnerability_detection_config(config_data)
         cls._load_global_config(config_data)
         
         logging.info("所有配置加载完成")
@@ -203,16 +196,7 @@ class ConfigManager:
             cls._logging_config = LoggingConfig()
             logging.warning("未找到日志配置，使用默认值")
     
-    @classmethod
-    def _load_vulnerability_detection_config(cls, config_data: Dict[str, Any]):
-        """加载漏洞检测配置"""
-        if 'vulnerability_detection' in config_data:
-            vuln_data = config_data['vulnerability_detection']
-            cls._vulnerability_detection_config = VulnerabilityDetectionConfig(**vuln_data)
-            logging.info(f"漏洞检测配置加载成功 - CWE类型: {cls._vulnerability_detection_config.cwe_types}")
-        else:
-            cls._vulnerability_detection_config = VulnerabilityDetectionConfig()
-            logging.warning("未找到漏洞检测配置，使用默认值")
+
     
     @classmethod
     def _load_global_config(cls, config_data: Dict[str, Any]):
@@ -264,12 +248,7 @@ class ConfigManager:
             cls.initialize()
         return cls._logging_config
     
-    @classmethod
-    def get_vulnerability_detection_config(cls) -> VulnerabilityDetectionConfig:
-        """获取漏洞检测配置"""
-        if not cls._initialized:
-            cls.initialize()
-        return cls._vulnerability_detection_config
+
     
     # 全局配置获取方法
     @classmethod

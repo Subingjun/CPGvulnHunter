@@ -11,6 +11,8 @@ from CPGvulnHunter.models.cpg.joernQueryResult import JoernQueryResult
 from CPGvulnHunter.models.cpg.semantics import Semantics
 from CPGvulnHunter.models.cpg.sink import Sink
 from CPGvulnHunter.models.cpg.source import Source
+from CPGvulnHunter.models.execption.serverCrash import JoernTimeoutException
+from CPGvulnHunter.utils.logger_config import LoggerConfigurator
 from .joernBridge import JoernBridge
 
 #这个类不应该做任何的返回检查，所有的命令执行检查都应在JoernBridge中完成
@@ -19,14 +21,17 @@ class JoernWrapper:
     
     def __init__(self) -> None:
         self.joern_config = ConfigManager.get_joern_config()
-        self.joern = JoernBridge()
-        self.logger = logging.getLogger(__name__)
+        self.joern_bridge = JoernBridge()
+        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         # Ensure logger uses the level from config
         self.logger.setLevel(logging.getLogger().level)
         self._semantics_applied: bool = False
         # 编译常用的正则表达式
         self._json_pattern = re.compile(r'"""(.*?)"""', re.DOTALL)
-        
+        self.max_retries = self.joern_config.max_retries
+
+
+
     def __enter__(self) -> 'JoernWrapper':
         return self
         
@@ -36,60 +41,38 @@ class JoernWrapper:
         
     def close(self) -> None:
         """关闭连接"""
-        if hasattr(self.joern, 'close_shell'):
-            self.joern.close_shell()
+        if hasattr(self.joern_bridge, 'close_shell'):
+            self.joern_bridge._close_shell()
     
     # === 核心执行方法 ===
     
     def _execute_command(self, command: str, timeout: Optional[int] = None) -> dict | None:
         """执行Joern命令的基础方法，支持自动重试和超时处理"""
-        try:
-            self.logger.debug(f"执行命令: {command}")
-            
-            # 根据命令类型设置不同的超时时间
-            if timeout is not None:
-                command_timeout = timeout
-            elif "importCode" in command:
-                command_timeout = 600  # 导入代码使用10分钟超时
-            elif any(keyword in command for keyword in ["dataFlow", "reachableBy", "flows"]):
-                command_timeout = 300  # 数据流查询使用5分钟超时
-            else:
-                command_timeout = 60  # 一般查询使用1分钟超时
-            
-            self.logger.debug(f"使用超时时间: {command_timeout}秒")
-            
-            result = self.joern.send_command(command, command_timeout)
-            self.logger.debug(f"命令结果: {result}")
-            
-            if result is not None:
-                json_result = self._extract_json_data(result)
-                return json_result
-            else:
-                self.logger.warning(f"命令返回空结果: {command}")
-                return None
+        for attempt in range(self.max_retries):
+            try:
+                self.logger.debug(f"执行命令: {command}")
+                result = self.joern_bridge.send_command(command)
+                self.logger.debug(f"命令结果: {result}")
                 
-        except Exception as e:
-            error_msg = str(e)
-            self.logger.error(f"命令执行异常: {error_msg}")
+                if result is not None:
+                    json_result = self._extract_json_data(result)
+                    return json_result
+                else:
+                    self.logger.warning(f"命令返回空结果: {command}")
+                    return None
             
-            # 检查是否是服务器崩溃
-            if "JOERN_SERVER_CRASHED" in error_msg:
-                self.logger.error("检测到Joern服务器崩溃，抛出特殊异常让上层处理")
-                # 重新抛出异常，让更上层的调用者处理
-                raise RuntimeError("JOERN_SERVER_CRASHED: Joern服务器连续超时，可能已崩溃") from e
-            
-            # 根据错误类型提供不同的建议
-            if "timeout" in error_msg.lower() or "超时" in error_msg:
-                self.logger.error(f"命令执行超时: {command}")
-                self.logger.error("建议：")
-                self.logger.error("1. 检查查询复杂度，尝试简化查询条件")
-                self.logger.error("2. 检查Joern服务器负载")
-                self.logger.error("3. 考虑分批处理或增加超时时间")
-            elif "连接" in error_msg or "connection" in error_msg.lower():
-                self.logger.error("连接问题，Joern服务器可能不稳定")
-                self.logger.error("建议：检查网络连接和服务器状态")
-            
-            return None
+            except JoernTimeoutException as e:
+                self.logger.error(f"命令执行超时: {command}, 错误: {e}")
+                self.logger.info("执行服务器健康检测····")
+                helth_check_result = self.joern_bridge.health_check()
+                if not helth_check_result:
+                    self.logger.error("Joern服务器崩溃，即将重新执行当前task")
+                    return self._execute_command(command, timeout)
+                else:
+                    self.logger.info("Joern服务器正常，尝试重新执行命令")
+                    continue            
+
+      
     
     def _extract_json_data(self, raw_result: str) -> Optional[dict]:
         """从Joern输出中提取JSON数据"""
@@ -105,7 +88,6 @@ class JoernWrapper:
     
     
     # === CPG基础操作 ===
-    
     def import_code(self, src_path: str) -> JoernQueryResult:
         """导入源代码"""
         cmd = f'importCode("{src_path}")'
@@ -208,10 +190,6 @@ class JoernWrapper:
         
         for import_cmd in imports:
             result = self._execute_command(import_cmd)
-            if result == None:
-                self.logger.error(f"导入失败: {import_cmd}")
-                return False
-        
         return True
     
     def define_extra_flows(self, extra_flows: str) -> bool:
@@ -223,7 +201,6 @@ class JoernWrapper:
         if result == None:
             self.logger.error("定义额外数据流规则失败: 结果为空")
             return False
-  
         return True
     
     def create_semantics_context(self) -> bool:
@@ -250,41 +227,38 @@ class JoernWrapper:
     def apply_semantics(self, semantics: Semantics) -> bool:
         extra_flows = semantics.get_extraFlows()
         """应用语义规则（完整流程）"""
-        try:
-            self.logger.info("开始应用语义规则...")
-            
-            # 1. 测试连接
-            if not self.joern.health_check():
-                self.logger.error("连接测试失败")
-                return False
-            
-            # 2. 导入必要类
-            if not self.import_dataflow_classes():
-                self.logger.error("导入数据流类失败")
-                return False
-            
-            # 3. 定义语义规则
-            if not self.define_extra_flows(extra_flows):
-                self.logger.error("定义语义规则失败")
-                return False
-            
-            # 4. 创建语义上下文
-            if not self.create_semantics_context():
-                self.logger.error("创建语义上下文失败")
-                return False
-            
-            # 5. 创建引擎上下文
-            if not self.create_engine_context():
-                self.logger.error("创建引擎上下文失败")
-                return False
-            
-            self._semantics_applied = True
-            self.logger.info("语义规则应用成功")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"语义规则应用异常: {e}")
+        self.logger.info("开始应用语义规则...")
+        
+        # 1. 测试连接
+        if not self.joern_bridge.health_check():
+            self.logger.error("连接测试失败")
             return False
+        
+        # 2. 导入必要类
+        if not self.import_dataflow_classes():
+            self.logger.error("导入数据流类失败")
+            return False
+        
+        # 3. 定义语义规则
+        if not self.define_extra_flows(extra_flows):
+            self.logger.error("定义语义规则失败")
+            return False
+        
+        # 4. 创建语义上下文
+        if not self.create_semantics_context():
+            self.logger.error("创建语义上下文失败")
+            return False
+        
+        # 5. 创建引擎上下文
+        if not self.create_engine_context():
+            self.logger.error("创建引擎上下文失败")
+            return False
+        
+        self._semantics_applied = True
+        self.logger.info("语义规则应用成功")
+        return True
+            
+
     
     def is_semantics_applied(self) -> bool:
         """检查语义规则是否已应用"""
@@ -333,7 +307,6 @@ class JoernWrapper:
     def execute_custom_query(self, query: str, timeout: Optional[int] = None) -> JoernQueryResult:
         """执行自定义查询"""
         return self._execute_command(query, timeout)
-
 
 
 

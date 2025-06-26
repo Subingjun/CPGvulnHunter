@@ -12,6 +12,7 @@ from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import Semantics
 from CPGvulnHunter.core.config import UnifiedConfig
 from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+@dataclass
 
 class CPG:
     """
@@ -20,40 +21,23 @@ class CPG:
     纯数据容器，用于存储 CPG 相关的所有信息
     """
     
-    # === 核心必需字段 ===
-    src_path: str
-    
-    # === wrapper ===
-    llm_wrapper: Optional[LLMWrapper] = None
-    joern_wrapper: Optional[JoernWrapper] = None
-
-    # === 数据容器字段 ===
-    functions: List[Function] = []
-    external_functions: List[Function] = []
-    internal_functions: List[Function] = []
-    operator_functions: List[Function] = []
-    function_fullName_list: List[str] = []
-    functions_info :dict[str:list[str]] = {}# 用于存储函数的详细信息，键为函数全名，值为函数对象
-    # === 语义分析字段 ===
-    external_semantics: Semantics = None
-    
-    # === 元数据字段 ===
-    metadata: Dict[str, Any] = None
-    
-    cpg_var: str = "cpg"  # 初始化 cpg_var 属性，默认值为 "cpg"
-    
 
     def __init__(self, src_path: str,llm_wrapper: Optional[LLMWrapper] = None, joern_wrapper: Optional[JoernWrapper] = None):
+        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         self.src_path = src_path
-        self.logger = logging.getLogger(__name__)
         self.llm_wrapper = llm_wrapper
         self.joern_wrapper = joern_wrapper
-        # 设置日志记录器
-        self.logger = logging.getLogger(__name__)
-        
+        self.functions: List[Function] = []
+        self.external_functions: List[Function] = []
+        self.internal_functions: List[Function] = []
+        self.operator_functions: List[Function] = []
+        self.function_fullName_list: List[str] = []
+        self.functions_info :dict[str:list[str]] = {}# 用于存储函数的详细信息，键为函数全名，值为函数对象
         # Ensure logger uses the level from config
         self.logger.info(f"开始初始化CPG - 源路径: {self.src_path}")
-        
+        self.external_semantics: Semantics = None
+        self.cpg_var: str = "cpg"  # 初始化 cpg_var 属性，默认值为 "cpg"
+
         # 验证源路径
         src_path_obj = Path(self.src_path)
         if not src_path_obj.exists():

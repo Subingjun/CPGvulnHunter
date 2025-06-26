@@ -93,18 +93,15 @@ class BasePass(ABC):
             logging.error("没有可用的语义规则，五点分析可能存在问题！")
         for source in self.sources:
             for sink in self.sinks:
-                try:
-                    dataflow_result = self.cpg.joern_wrapper.run_taint_analysis(
-                        source,
-                        sink
-                    )
-                    if not dataflow_result or dataflow_result.flows is None or len(dataflow_result.flows) == 0:
-                        logging.info(f"源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流分析未找到路径")
-                        continue
-                    self.dataFlowResults.append(dataflow_result)
-                    logging.info(f"分析源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流结果: {dataflow_result}")   
-                except Exception as e:
-                    logging.error(f"分析源 {source.full_name} 到汇聚点 {sink.full_name} 时出错: {e}")
+                dataflow_result = self.cpg.joern_wrapper.run_taint_analysis(
+                    source,
+                    sink
+                )
+                if not dataflow_result or dataflow_result.flows is None or len(dataflow_result.flows) == 0:
+                    logging.info(f"源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流分析未找到路径")
+                    continue
+                self.dataFlowResults.append(dataflow_result)
+                logging.info(f"分析源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流结果: {dataflow_result}")              
         return None
 
     def vuln_analysis(self):
@@ -115,28 +112,25 @@ class BasePass(ABC):
         for result in self.dataFlowResults:
             self.logger.debug(f"开始分析数据流: {result}")
             for flow in result.flows:
-                try:
-                    self.logger.info(f"分析数据流路径: {flow}")
-                    request = self.build_dataflow_analysis_request(flow)
-                    self.logger.debug(f"构建的数据流分析请求: {request.prompt}")
-                    llm_result  = self.cpg.llm_wrapper.analyze_dataflow(request)
-                    # 将结果转换为 DataflowResult 类型
-                    if llm_result and 'analysis_result' in llm_result:
-                        llm_result = llm_result['analysis_result']
-                        analysis_result = VulnerabilityResult(
-                            source=result.source.to_dict(),
-                            sink=result.sink.to_dict(),
-                            is_vulnerable=llm_result.get('is_vulnerable', None),
-                            confidence=llm_result.get('confidence', None),
-                            reason=llm_result.get('reason', None),
-                            flowPath_code=flow._get_function_chain(),
-                            flows=flow
-                        )
-                        self.vulnerabilitiesResults.append(analysis_result)
-                        self.logger.info(f"数据流分析结果: {analysis_result}")
-                    
-                except Exception as e:
-                    self.logger.error(f"分析数据流路径时出错: {e}")
+                self.logger.info(f"分析数据流路径: {flow}")
+                request = self.build_dataflow_analysis_request(flow)
+                self.logger.debug(f"构建的数据流分析请求: {request.prompt}")
+                llm_result  = self.cpg.llm_wrapper.analyze_dataflow(request)
+                # 将结果转换为 DataflowResult 类型
+                if llm_result and 'analysis_result' in llm_result:
+                    llm_result = llm_result['analysis_result']
+                    analysis_result = VulnerabilityResult(
+                        source=result.source.to_dict(),
+                        sink=result.sink.to_dict(),
+                        is_vulnerable=llm_result.get('is_vulnerable', None),
+                        confidence=llm_result.get('confidence', None),
+                        reason=llm_result.get('reason', None),
+                        flowPath_code=flow._get_function_chain(),
+                        flows=flow
+                    )
+                    self.vulnerabilitiesResults.append(analysis_result)
+                    self.logger.info(f"数据流分析结果: {analysis_result}")
+                
 
     @abstractmethod
     def build_dataflow_analysis_request(self,path:FlowPath) -> LLMRequest:
@@ -144,12 +138,16 @@ class BasePass(ABC):
 
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取分析结果，包含当前pass的所有信息"""
+        project_info = {
+            'name': self.cpg.src_path
+        }
         sources_info = [source.to_dict() for source in self.sources]
         sinks_info = [sink.to_dict() for sink in self.sinks]
         sanitizers_info = [sanitizer.to_dict() for sanitizer in self.sanitizers]
         data_flow_results_info = [result.to_dict() for result in self.dataFlowResults]
         vulnerabilities_info = [vuln.to_dict() for vuln in self.vulnerabilitiesResults]
         result_info = {
+            'project_info' : project_info,
             'analysis_results': vulnerabilities_info,
             'sources': sources_info,
             'sinks': sinks_info,

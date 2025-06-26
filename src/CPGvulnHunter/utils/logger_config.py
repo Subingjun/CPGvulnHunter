@@ -98,6 +98,46 @@ class LoggerConfigurator:
         for logger_name in ['urllib3', 'requests', 'websockets', 'httpx']:
             logging.getLogger(logger_name).setLevel(logging.WARNING)
 
+
+    @staticmethod
+    def setup_custom_file_handler(log_file: str, 
+                                level: str = "INFO",
+                                max_file_size: str = "10MB",
+                                backup_count: int = 5) -> None:
+        """
+        为根日志记录器设置自定义文件处理器
+        
+        Args:
+            log_file: 日志文件路径
+            level: 日志级别
+            max_file_size: 最大文件大小
+            backup_count: 备份文件数量
+        """
+        root_logger = logging.getLogger()
+        
+        # 移除现有的文件处理器，避免重复
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+        for handler in file_handlers:
+            root_logger.removeHandler(handler)
+            handler.close()
+        
+        # 设置日志级别
+        log_level = getattr(logging, level.upper(), logging.INFO)
+        
+        # 创建格式化器
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        
+        # 调用内部方法
+        LoggerConfigurator._setup_file_handler(
+            root_logger, log_file, log_level, formatter, max_file_size, backup_count
+        )
+        
+        print(f"日志文件处理器已设置: {log_file}")
+
+
+
+
+
     @staticmethod
     def _setup_file_handler(root_logger: logging.Logger, 
                            log_file: str,

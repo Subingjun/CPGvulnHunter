@@ -18,10 +18,10 @@ class EasyPass:
         self.logger = LoggerConfigurator.get_class_logger(self.__class__)
         self.vulnerabilitiesResults = []  # 存储漏洞分析结果
 
-    def run(self):
+    def run(self,output_path="./easy_results"):
         """执行EasyPass"""
         self.logger.info("开始执行EasyPass")
-        self.analyze_functions()
+        self.analyze_functions(output_path)
         return self.vulnerabilitiesResults
 
     def analyze_functions(self, output_path="./easy_results"):
@@ -256,6 +256,7 @@ class EasyPass:
    - 整数溢出（Integer Overflow）
    - 未初始化变量使用（Use of Uninitialized Variable）
    - 竞态条件（Race Condition）
+   - 其他类型的可能存在的安全风险
 
 2. 攻击面分析 - 判断函数是否为攻击入口点：
    - 是否接收外部输入（网络输入、文件输入、用户输入等）
@@ -285,7 +286,7 @@ class EasyPass:
 注意：即使没有发现漏洞，也要分析是否为攻击面。"""
 
         # 用户提示词 - 提供具体的函数信息
-        userprompt = f"""请分析以下C/C++函数的安全性和攻击面：
+        userprompt = f"""请分析以下函数的安全性和攻击面：
 
 函数基本信息：
 - 函数名称: {function.full_name}

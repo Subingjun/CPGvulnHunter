@@ -12,18 +12,6 @@ import json
 # DataFlowResult包含多个FlowPath，每个FlowPath表示一条数据流路径
 # FlowPath包含多个FlowNode，每个FlowNode表示数据流路径中的一个节点
 
-class NodeType(Enum):
-    """节点类型枚举"""
-    METHOD_PARAMETER_IN = "METHOD_PARAMETER_IN"      # 方法输入参数节点 - 表示函数/方法的输入参数
-    METHOD_PARAMETER_OUT = "METHOD_PARAMETER_OUT"    # 方法输出参数节点 - 表示函数/方法的输出参数（引用传递）
-    METHOD_RETURN = "METHOD_RETURN"                  # 方法返回值节点 - 表示函数/方法的返回值
-    CALL = "CALL"                                    # 函数调用节点 - 表示对函数或方法的调用
-    IDENTIFIER = "IDENTIFIER"                        # 标识符节点 - 表示变量名、函数名等标识符
-    LITERAL = "LITERAL"                              # 字面量节点 - 表示常量值（如字符串、数字等）
-    LOCAL = "LOCAL"                                  # 局部变量节点 - 表示局部变量的声明或定义
-    BLOCK = "BLOCK"                                  # 代码块节点 - 表示代码块（如if块、循环体等）
-    CONTROL_STRUCTURE = "CONTROL_STRUCTURE"          # 控制结构节点 - 表示控制流语句（如if、for、while等）
-    UNKNOWN = "UNKNOWN"                              # 未知类型节点 - 无法识别或不在上述类型中的节点
 
 @dataclass
 class FlowNode:
@@ -163,22 +151,7 @@ class FlowNode:
                                    'name', 'order', 'index', 'evaluationStrategy', 'isVariadic',
                                    'argumentIndex', 'signature', 'methodFullName', 'dispatchType']}
         )
-    
-    @property
-    def node_type(self) -> NodeType:
-        """获取节点类型"""
-        try:
-            return NodeType(self.label)
-        except ValueError:
-            return NodeType.UNKNOWN
-    
-    def is_source(self) -> bool:
-        """判断是否为数据源节点"""
-        return self.node_type in [NodeType.METHOD_PARAMETER_IN, NodeType.CALL, NodeType.METHOD_RETURN]
-    
-    def is_sink(self) -> bool:
-        """判断是否为数据汇聚节点"""
-        return self.node_type in [NodeType.CALL, NodeType.METHOD_PARAMETER_IN]
+
     
     def get_display_name(self) -> str:
         """获取显示名称"""
