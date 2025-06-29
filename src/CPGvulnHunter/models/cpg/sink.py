@@ -72,7 +72,10 @@ class Sink(Function):
                 #todo  面向对象语言的自身污染。
                 pass
             else:
-                logging.error("非法的方法索引！")
+                # 使用线程logger
+                from CPGvulnHunter.utils.threadLogger import get_thread_logger
+                logger = get_thread_logger()
+                logger.error("非法的方法索引！")
             
 
     def to_dict(self):

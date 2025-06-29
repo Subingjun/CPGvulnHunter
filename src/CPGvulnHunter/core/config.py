@@ -119,7 +119,7 @@ class ConfigManager:
             logging.info(f"配置文件读取成功，包含 {len(config_data)} 个顶级配置项")
             logging.debug(f"配置项: {list(config_data.keys())}")
         except Exception as e:
-            logging.error(f"配置文件读取失败: {e}")
+            logging.error(f"配置文件读取失败: {e}", exc_info=True)
             cls._load_defaults()
             return
         

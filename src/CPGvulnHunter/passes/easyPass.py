@@ -1,6 +1,6 @@
 from CPGvulnHunter.core.cpg import CPG
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 
 
@@ -15,7 +15,7 @@ class EasyPass:
         :param cpg: CPG对象
         """
         self.cpg:CPG = cpg
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.logger = get_thread_logger()
         self.vulnerabilitiesResults = []  # 存储漏洞分析结果
 
     def run(self,output_path="./easy_results"):
@@ -96,7 +96,7 @@ class EasyPass:
                     self.logger.warning(f"⚠️  函数 {function.full_name} 的LLM分析返回空结果")
                     
             except Exception as e:
-                self.logger.error(f"❌ 分析函数 {function.full_name} 时出错: {e}")
+                self.logger.error(f"❌ 分析函数 {function.full_name} 时出错: {e}", exc_info=True)
         
         # 输出最终统计信息
         self.logger.info(f"🎯 EasyPass分析完成:")
@@ -159,11 +159,11 @@ class EasyPass:
                 return None
                 
         except json.JSONDecodeError as e:
-            self.logger.error(f"解析LLM JSON响应失败: {e}")
+            self.logger.error(f"解析LLM JSON响应失败: {e}", exc_info=True)
             self.logger.debug(f"原始响应: {llm_response}")
             return None
         except Exception as e:
-            self.logger.error(f"处理LLM响应时出错: {e}")
+            self.logger.error(f"处理LLM响应时出错: {e}", exc_info=True)
             return None
 
     def _append_to_file(self, file_path, analysis_result, result_type):
@@ -202,7 +202,7 @@ class EasyPass:
             self.logger.debug(f"已将{result_type}结果追加到: {file_path}")
             
         except Exception as e:
-            self.logger.error(f"写入文件 {file_path} 时出错: {e}")
+            self.logger.error(f"写入文件 {file_path} 时出错: {e}", exc_info=True)
 
     def _save_analysis_summary(self, summary_file, total_functions, vulnerable_count, attack_surface_count):
         """保存分析摘要"""
@@ -229,7 +229,7 @@ class EasyPass:
             self.logger.info(f"分析摘要已保存到: {summary_file}")
             
         except Exception as e:
-            self.logger.error(f"保存分析摘要失败: {e}")
+            self.logger.error(f"保存分析摘要失败: {e}", exc_info=True)
 
     def run(self, output_path=None):
         """执行EasyPass"""

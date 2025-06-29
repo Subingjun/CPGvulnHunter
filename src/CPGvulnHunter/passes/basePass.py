@@ -13,7 +13,7 @@ from CPGvulnHunter.models.cpg.sink import Sink
 from CPGvulnHunter.models.cpg.flowPath import DataFlowResult, FlowPath
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.dataflowResult import VulnerabilityResult
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 class BasePassResult():
     """
@@ -41,9 +41,8 @@ class BasePass(ABC):
         self.sanitizers: list[Function] = []  
         self.dataFlowResults: list[DataFlowResult] = []
         self.vulnerabilitiesResults: list[VulnerabilityResult] = []  # 存储漏洞分析结果
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
-        # Ensure logger uses the level from config
-        self.logger.setLevel(logging.getLogger().level)
+        self.logger = get_thread_logger()
+        # 线程logger会自动继承Task设置的级别
         if self.taget_area == "external":
             self.taget_functions = self.cpg.external_functions
         elif self.taget_area == "internal":
@@ -59,14 +58,14 @@ class BasePass(ABC):
             request = self.build_classify_method_request(func)
             response = self.cpg.llm_wrapper.function_clasification(request)
             if not response or 'analysis_result' not in response:
-                logging.warning(f"LLM分析结果为空或格式不正确: {response}")
+                self.logger.warning(f"LLM分析结果为空或格式不正确: {response}")
                 return
             
             roles = response.get('analysis_result', {}).get('roles', [])
             for role in roles:
                 role_type = role.get('role')
                 parameter_index = role.get('parameter_index', -1)  # 默认-1表示返回值
-                logging.info(f"函数 {func.name} 角色: {role_type}, 参数索引: {parameter_index}, 置信度: {role.get('confidence', 0.0)}, 理由: {role.get('reason', '')}")
+                self.logger.info(f"函数 {func.name} 角色: {role_type}, 参数索引: {parameter_index}, 置信度: {role.get('confidence', 0.0)}, 理由: {role.get('reason', '')}")
                 
                 if role_type == 'SOURCE':
                     source = Source.create_from_function(func, index=parameter_index)
@@ -86,11 +85,11 @@ class BasePass(ABC):
     def taint_analysis(self)  -> None:
         """执行污点分析"""
         if not self.cpg.joern_wrapper:
-            logging.error("Joern wrapper未初始化，无法执行污点分析")
+            self.logger.error("Joern wrapper未初始化，无法执行污点分析")
             return None
         semantics = self.cpg.external_semantics
         if not semantics or len(semantics.semantic_list) == 0:
-            logging.error("没有可用的语义规则，五点分析可能存在问题！")
+            self.logger.error("没有可用的语义规则，五点分析可能存在问题！")
         for source in self.sources:
             for sink in self.sinks:
                 dataflow_result = self.cpg.joern_wrapper.run_taint_analysis(
@@ -98,10 +97,10 @@ class BasePass(ABC):
                     sink
                 )
                 if not dataflow_result or dataflow_result.flows is None or len(dataflow_result.flows) == 0:
-                    logging.info(f"源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流分析未找到路径")
+                    self.logger.info(f"源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流分析未找到路径")
                     continue
                 self.dataFlowResults.append(dataflow_result)
-                logging.info(f"分析源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流结果: {dataflow_result}")              
+                self.logger.info(f"分析源 {source.full_name} 到汇聚点 {sink.full_name} 的数据流结果: {dataflow_result}")              
         return None
 
     def vuln_analysis(self):
@@ -176,8 +175,8 @@ class BasePass(ABC):
                 import json
                 json.dump(analysis_results, f, ensure_ascii=False, indent=4)
             self.logger.info(f"pass {self.name} 分析结果已保存到 {save_path}")
-        except Exception as e:      
-            self.logger.error(f"保存分析结果失败: {e}")
+        except Exception as e:
+            self.logger.error(f"保存分析结果失败: {e}", exc_info=True)
             raise RuntimeError(f"保存分析结果失败: {e}")
         
     def run(self,output_path: Optional[str] = None) -> None:

@@ -8,7 +8,7 @@ from pathlib import Path
 from CPGvulnHunter.core.cpg import CPG
 from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.passes.basePass import BasePass
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 
 class InitPassResult():
@@ -70,7 +70,7 @@ class InitPass():
         """
         :param cpg: CPG对象
         """
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.logger = get_thread_logger()
         self.cpg = cpg
         self.name = "initpass"  # 修改为小写，符合文件夹命名规范
         # InitPass不需要sources, sinks等，但需要记录语义分析结果

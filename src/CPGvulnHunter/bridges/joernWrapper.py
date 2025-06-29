@@ -12,23 +12,25 @@ from CPGvulnHunter.models.cpg.semantics import Semantics
 from CPGvulnHunter.models.cpg.sink import Sink
 from CPGvulnHunter.models.cpg.source import Source
 from CPGvulnHunter.models.execption.serverCrash import JoernTimeoutException
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 from .joernBridge import JoernBridge
 
 #这个类不应该做任何的返回检查，所有的命令执行检查都应在JoernBridge中完成
-class JoernWrapper:
+class JoernWrapper():
     """Joern交互包装器 - 封装所有Joern操作"""
     
     def __init__(self) -> None:
+        # 使用当前线程的logger
+        self.logger = get_thread_logger()
+        
         self.joern_config = ConfigManager.get_joern_config()
         self.joern_bridge = JoernBridge()
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
-        # Ensure logger uses the level from config
-        self.logger.setLevel(logging.getLogger().level)
         self._semantics_applied: bool = False
         # 编译常用的正则表达式
         self._json_pattern = re.compile(r'"""(.*?)"""', re.DOTALL)
         self.max_retries = self.joern_config.max_retries
+        
+        self.logger.info("JoernWrapper初始化完成")
 
 
 
@@ -48,29 +50,20 @@ class JoernWrapper:
     
     def _execute_command(self, command: str, timeout: Optional[int] = None) -> dict | None:
         """执行Joern命令的基础方法，支持自动重试和超时处理"""
-        for attempt in range(self.max_retries):
-            try:
-                self.logger.debug(f"执行命令: {command}")
-                result = self.joern_bridge.send_command(command)
-                self.logger.debug(f"命令结果: {result}")
-                
-                if result is not None:
-                    json_result = self._extract_json_data(result)
-                    return json_result
-                else:
-                    self.logger.warning(f"命令返回空结果: {command}")
-                    return None
+        try:
+            self.logger.debug(f"执行命令: {command}")
+            result = self.joern_bridge.send_command(command)
+            self.logger.debug(f"命令结果: {result}")
             
-            except JoernTimeoutException as e:
-                self.logger.error(f"命令执行超时: {command}, 错误: {e}")
-                self.logger.info("执行服务器健康检测····")
-                helth_check_result = self.joern_bridge.health_check()
-                if not helth_check_result:
-                    self.logger.error("Joern服务器崩溃，即将重新执行当前task")
-                    return self._execute_command(command, timeout)
-                else:
-                    self.logger.info("Joern服务器正常，尝试重新执行命令")
-                    continue            
+            if result is not None:
+                json_result = self._extract_json_data(result)
+                return json_result
+            else:
+                self.logger.warning(f"命令返回空结果: {command}")
+                return None
+        
+        except Exception as e:
+            raise
 
       
     
@@ -196,21 +189,13 @@ class JoernWrapper:
         """定义额外的数据流规则"""
         if not extra_flows.strip():
             return True
-        
         result = self._execute_command(extra_flows)
-        if result == None:
-            self.logger.error("定义额外数据流规则失败: 结果为空")
-            return False
         return True
     
     def create_semantics_context(self) -> bool:
         """创建语义上下文"""
         cmd = "implicit val semantics: Semantics = DefaultSemantics().plus(extraFlows)"
-        result = self._execute_command(cmd)
-        if result == None:
-            self.logger.error(f"语义上下文创建失败: {result.error_message}")
-            return False
-        
+        self._execute_command(cmd)        
         return True
     
     def create_engine_context(self, max_call_depth: int = 40) -> bool:
@@ -218,9 +203,7 @@ class JoernWrapper:
         cmd = f"implicit val engineConfig: EngineConfig = EngineConfig(maxCallDepth = {max_call_depth})\n"
         cmd += f"implicit val context: EngineContext = EngineContext(semantics = semantics, config = engineConfig)"
         result = self._execute_command(cmd)
-        if result == None:
-            self.logger.error(f"引擎上下文创建失败: {result.error_message}")
-            return False
+
         
         return True
     
@@ -231,7 +214,7 @@ class JoernWrapper:
         
         # 1. 测试连接
         if not self.joern_bridge.health_check():
-            self.logger.error("连接测试失败")
+            self.logger.info("连接测试失败")
             return False
         
         # 2. 导入必要类

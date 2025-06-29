@@ -11,7 +11,7 @@ from CPGvulnHunter.bridges.llmWrapper import LLMWrapper
 from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import Semantics
 from CPGvulnHunter.core.config import UnifiedConfig
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 @dataclass
 
 class CPG:
@@ -23,7 +23,7 @@ class CPG:
     
 
     def __init__(self, src_path: str,llm_wrapper: Optional[LLMWrapper] = None, joern_wrapper: Optional[JoernWrapper] = None):
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.logger = get_thread_logger()
         self.src_path = src_path
         self.llm_wrapper = llm_wrapper
         self.joern_wrapper = joern_wrapper
@@ -52,7 +52,7 @@ class CPG:
             import_duration = time.time() - import_start_time
             self.logger.info(f"代码导入完成，耗时: {import_duration:.2f}秒")
         except Exception as e:
-            self.logger.error(f"代码导入失败: {e}")
+            self.logger.error(f"代码导入失败: {e}", exc_info=True)
             raise
         
         self.logger.info("开始获取所有函数...")
@@ -60,7 +60,7 @@ class CPG:
             self._get_all_functions()
             self.logger.info("所有函数获取成功")
         except Exception as e:
-            self.logger.error(f"获取函数失败: {e}")
+            self.logger.error(f"获取函数失败: {e}", exc_info=True)
             raise
         self.logger.info("CPG初始化完成")
         self.logger.info(f"CPG实例创建成功 - 源路径: {self.src_path}, 函数总数: {len(self.functions)}")
@@ -101,7 +101,7 @@ class CPG:
             self.logger.info(f"内部函数数: {len(self.internal_functions)}")
             self.logger.info(f"操作符函数数: {len(self.operator_functions)}")
         except Exception as e:
-            self.logger.error(f"获取所有函数失败: {e}")
+            self.logger.error(f"获取所有函数失败: {e}", exc_info=True)
             raise
 
     def _get_single_function(self,function_full_name: str) -> Optional[Function]:

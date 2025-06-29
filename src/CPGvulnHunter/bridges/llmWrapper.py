@@ -14,7 +14,7 @@ from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import ParameterFlow, Semantic, Semantics
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.prompt import FunctionPrompt
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 
 
@@ -30,7 +30,7 @@ class LLMWrapper:
         """
         初始化LLM桥接器
         """
-        self.logger = LoggerConfigurator.get_class_logger(self.__class__)
+        self.logger = get_thread_logger()
         self.logger.info("开始初始化LLM Wrapper...")
         self.config = ConfigManager.get_llm_config()
         
@@ -60,9 +60,9 @@ class LLMWrapper:
             self.logger.debug(f"LLM客户端类型: {type(self.llm_client).__name__}")
             
         except Exception as e:
-            self.logger.error(f"LLM Wrapper初始化失败: {e}")
+            self.logger.error(f"LLM Wrapper初始化失败: {e}", exc_info=True)
             import traceback
-            self.logger.error(f"初始化错误堆栈: {traceback.format_exc()}")
+            self.logger.error(f"初始化错误堆栈: {traceback.format_exc()}", exc_info=True)
             raise
 
     def _load_cache(self):
@@ -82,7 +82,7 @@ class LLMWrapper:
                 self._semantic_cache = {}
                 
         except Exception as e:
-            self.logger.error(f"加载缓存文件失败: {e}")
+            self.logger.error(f"加载缓存文件失败: {e}", exc_info=True)
             self._semantic_cache = {}
 
     def _save_cache(self):
@@ -99,7 +99,7 @@ class LLMWrapper:
             self.logger.debug(f"缓存已保存到文件: {self._cache_file}, 包含 {len(self._semantic_cache)} 条记录")
                 
         except Exception as e:
-            self.logger.error(f"保存缓存文件失败: {e}")
+            self.logger.error(f"保存缓存文件失败: {e}", exc_info=True)
 
     def _semantic_to_dict(self, semantic: Semantic) -> dict:
         """
@@ -188,7 +188,7 @@ class LLMWrapper:
             func_start_time = time.time()
             try:
                 func_name = getattr(func, 'full_name', f'function_{i}')
-                self.logger.info(f"正在分析函数 {i}/{len(external_functions)}: {func_name}")
+                self.logger.debug(f"正在分析函数 {i}/{len(external_functions)}: {func_name}")
                 
                 # 分析单个函数
                 semantic = self._analyze_single_external_function(func)
@@ -205,7 +205,7 @@ class LLMWrapper:
             except Exception as e:
                 error_count += 1
                 func_name = getattr(func, 'full_name', f'function_{i}')
-                self.logger.error(f"分析函数 {func_name} 时发生异常: {e}")
+                self.logger.error(f"分析函数 {func_name} 时发生异常: {e}", exc_info=True)
                 continue
         
         total_time = time.time() - start_time
@@ -234,7 +234,7 @@ class LLMWrapper:
         # 检查缓存
         if func_signature in self._semantic_cache:
             self._cache_hits += 1
-            self.logger.info(f"函数 {func_name} 从缓存中获取分析结果 (签名: {func_signature})")
+            self.logger.debug(f"函数 {func_name} 从缓存中获取分析结果 (签名: {func_signature})")
             try:
                 cached_data = self._semantic_cache[func_signature]
                 semantic = self._dict_to_semantic(cached_data)

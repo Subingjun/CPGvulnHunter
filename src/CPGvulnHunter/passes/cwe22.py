@@ -13,7 +13,7 @@ from CPGvulnHunter.models.cpg.flowPath import DataFlowResult, FlowPath
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.dataflowResult import VulnerabilityResult
 from CPGvulnHunter.passes.basePass import BasePass
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 
 
