@@ -10,7 +10,7 @@ def batch_run(src_path,config_file):
         if item.is_dir():
             src_paths.append(str(item))
     engine = VulnerabilityEngine(config_file=config_file)
-    engine.batch_run(src_paths=src_paths, passes=['cwe78'],threads = 1)
+    engine.batch_run(src_paths=src_paths, passes=['quickCWE78'],threads = 1)
 
 def run(src_path, config_file):
     """
@@ -29,7 +29,7 @@ def run_quick_pass(src_path, config_file):
     :param config_file: 配置文件路径
     """
     engine = VulnerabilityEngine(config_file=config_file)
-    engine.run(src_path=[src_path], passes=['quickPass'])
+    engine.run(src_path=[src_path], passes=['quickCWE78'])
 
 
 
@@ -37,5 +37,6 @@ if __name__ == "__main__":
     # 示例：快速分析
     config_file = "config.yml"
     src_path = "/home/nstl/data/CPGvulnHunter/test/test_case/juliet/output/CWE78_OS_Command_Injection/s01"
+    test_src_path = "/home/nstl/data/CPGvulnHunter/test/test_case/test4"
     single_src_path = "/home/nstl/data/CPGvulnHunter/test/test_case/test0"
-    run_quick_pass(single_src_path,config_file)
+    batch_run(test_src_path,config_file)

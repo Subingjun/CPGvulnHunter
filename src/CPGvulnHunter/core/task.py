@@ -21,7 +21,7 @@ class Task:
         self.taget_src_path = target_src_path
         self.passes = passes if passes is not None else []  # 默认空列表
         self.analysis_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_path = Path(output_path) / f"{Path(target_src_path).name}_{self.analysis_timestamp}"        
+        self.output_path = Path(output_path) / f"{Path(target_src_path).name}"        
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.thread_name = f"task_{Path(target_src_path).name}"
         self.logger = setup_thread_logger(
@@ -120,11 +120,9 @@ class Task:
             self.logger.error(error_msg, exc_info=True)
             
             # 检查是否是服务器崩溃错误，如果是则向上传播
-            if self._is_server_crash_error(str(e)):
-                self.logger.error(f"Pass {pass_name} 中检测到服务器崩溃，传播异常以触发任务重试", exc_info=True)
-                raise RuntimeError(f"JOERN_SERVER_CRASHED: {error_msg}") from e
-            else:
-                raise RuntimeError(f"unknow err: {error_msg}") from e
+            self.logger.error(f"Pass {pass_name} 失败，传播异常以触发任务重试", exc_info=True)
+            raise RuntimeError(f"some thing wrong: {error_msg}") from e
+
 
 
     

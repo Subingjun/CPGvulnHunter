@@ -60,7 +60,7 @@ class LoggerManager:
         # 创建格式化器
 
         formatter = logging.Formatter(
-            f'%(asctime)s - {config.thread_name} - %(levelname)s - %(name)s - %(message)s'
+            f'%(asctime)s - {config.thread_name} - %(levelname)s - %(message)s'
         )       
         
         # 控制台处理器

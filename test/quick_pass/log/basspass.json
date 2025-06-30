@@ -1,0 +1,1335 @@
+{
+    "project_info": {
+        "name": "/home/nstl/data/CPGvulnHunter/test/test_case/test4/CWE78_OS_Command_Injection__char_connect_socket_execl_01"
+    },
+    "analysis_results": [
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 30064771104,
+                        "code": "(char *)(data + dataLen)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771103,
+                        "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476757,
+                        "code": "recvResult",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476763,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476764,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771113,
+                        "code": "recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771111,
+                        "code": "recvResult == -1",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771110,
+                        "code": "recvResult == -1 || recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 128849018880,
+                        "code": "RET",
+                        "line_number": 133,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771105,
+                        "code": "data + dataLen",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771104,
+                        "code": "(char *)(data + dataLen)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771103,
+                        "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476757,
+                        "code": "recvResult",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476763,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476764,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771113,
+                        "code": "recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771111,
+                        "code": "recvResult == -1",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771110,
+                        "code": "recvResult == -1 || recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 128849018880,
+                        "code": "RET",
+                        "line_number": 133,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771115,
+                        "code": "data[dataLen + recvResult / sizeof(char)]",
+                        "line_number": 173,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476770,
+                        "code": "data",
+                        "line_number": 175,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476774,
+                        "code": "data",
+                        "line_number": 180,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771105,
+                        "code": "data + dataLen",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771104,
+                        "code": "(char *)(data + dataLen)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771103,
+                        "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476757,
+                        "code": "recvResult",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476763,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476764,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771113,
+                        "code": "recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771111,
+                        "code": "recvResult == -1",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771110,
+                        "code": "recvResult == -1 || recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 128849018880,
+                        "code": "RET",
+                        "line_number": 133,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 30064771105,
+                        "code": "data + dataLen",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771104,
+                        "code": "(char *)(data + dataLen)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771103,
+                        "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476757,
+                        "code": "recvResult",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476763,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476764,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771113,
+                        "code": "recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771111,
+                        "code": "recvResult == -1",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771110,
+                        "code": "recvResult == -1 || recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 128849018880,
+                        "code": "RET",
+                        "line_number": 133,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 68719476760,
+                        "code": "dataLen",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771105,
+                        "code": "data + dataLen",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771104,
+                        "code": "(char *)(data + dataLen)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771103,
+                        "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476757,
+                        "code": "recvResult",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476763,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476764,
+                        "code": "recvResult",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771113,
+                        "code": "recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771111,
+                        "code": "recvResult == -1",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771110,
+                        "code": "recvResult == -1 || recvResult == 0",
+                        "line_number": 168,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 128849018880,
+                        "code": "RET",
+                        "line_number": 133,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "execl",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "execl",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 4
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "数据来源于recv函数，这是一个明确的外部输入源，攻击者可以通过网络连接控制输入数据。数据随后被直接用于execl函数调用，没有进行任何有效的输入验证或清理。攻击者可以注入恶意命令，因为数据流路径中没有防护措施。",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476779,
+                        "code": "data",
+                        "line_number": 196,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        },
+        {
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "execl",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "execl",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 4
+            },
+            "vuln_function_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "is_vulnerable": true,
+            "confidence": 0.9,
+            "reason": "数据来源于recv函数，这是一个明确的外部输入源，攻击者可以通过网络连接控制输入数据。数据随后被直接用于execl函数调用，没有进行任何有效的输入验证或清理。攻击者可以注入恶意命令，因为数据流路径中没有防护措施。",
+            "flowPath_code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "flowPath": {
+                "nodes": [
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 30064771115,
+                        "code": "data[dataLen + recvResult / sizeof(char)]",
+                        "line_number": 173,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476770,
+                        "code": "data",
+                        "line_number": 175,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476774,
+                        "code": "data",
+                        "line_number": 180,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476759,
+                        "code": "data",
+                        "line_number": 167,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    },
+                    {
+                        "node_id": 68719476779,
+                        "code": "data",
+                        "line_number": 196,
+                        "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                    }
+                ]
+            }
+        }
+    ],
+    "sources": [
+        {
+            "name": "decodeHexChars",
+            "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+            "ast_parent_type": "TYPE_DECL",
+            "code": "size_t decodeHexChars(unsigned char * bytes, size_t numBytes, const char * hex);",
+            "column_number": 8,
+            "column_number_end": 79,
+            "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+            "full_name": "decodeHexChars",
+            "generic_signature": "<empty>",
+            "hash_value": null,
+            "is_external": false,
+            "line_number": 102,
+            "line_number_end": 102,
+            "offset": null,
+            "offset_end": null,
+            "order": 1,
+            "signature": "size_t(unsigned char*,size_t,char*)",
+            "index": -1
+        },
+        {
+            "name": "recv",
+            "ast_parent_full_name": "<global>",
+            "ast_parent_type": "NAMESPACE_BLOCK",
+            "code": "<empty>",
+            "column_number": null,
+            "column_number_end": null,
+            "filename": "<empty>",
+            "full_name": "recv",
+            "generic_signature": "<empty>",
+            "hash_value": null,
+            "is_external": true,
+            "line_number": null,
+            "line_number_end": null,
+            "offset": null,
+            "offset_end": null,
+            "order": 0,
+            "signature": "",
+            "index": 2
+        }
+    ],
+    "sinks": [
+        {
+            "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+            "ast_parent_type": "TYPE_DECL",
+            "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+            "column_number": 1,
+            "column_number_end": 1,
+            "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+            "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "generic_signature": "<empty>",
+            "hash_value": null,
+            "is_external": false,
+            "line_number": 133,
+            "line_number_end": 197,
+            "offset": null,
+            "offset_end": null,
+            "order": 1,
+            "signature": "void()",
+            "index": -1
+        },
+        {
+            "name": "execl",
+            "ast_parent_full_name": "<global>",
+            "ast_parent_type": "NAMESPACE_BLOCK",
+            "code": "<empty>",
+            "column_number": null,
+            "column_number_end": null,
+            "filename": "<empty>",
+            "full_name": "execl",
+            "generic_signature": "<empty>",
+            "hash_value": null,
+            "is_external": true,
+            "line_number": null,
+            "line_number_end": null,
+            "offset": null,
+            "offset_end": null,
+            "order": 0,
+            "signature": "",
+            "index": 4
+        }
+    ],
+    "sanitizers": [],
+    "data_flow_results": [
+        {
+            "flows": [
+                {
+                    "nodes": [
+                        {
+                            "node_id": 30064771104,
+                            "code": "(char *)(data + dataLen)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771103,
+                            "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476757,
+                            "code": "recvResult",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476763,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476764,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771113,
+                            "code": "recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771111,
+                            "code": "recvResult == -1",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771110,
+                            "code": "recvResult == -1 || recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 128849018880,
+                            "code": "RET",
+                            "line_number": 133,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                },
+                {
+                    "nodes": [
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771105,
+                            "code": "data + dataLen",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771104,
+                            "code": "(char *)(data + dataLen)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771103,
+                            "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476757,
+                            "code": "recvResult",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476763,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476764,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771113,
+                            "code": "recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771111,
+                            "code": "recvResult == -1",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771110,
+                            "code": "recvResult == -1 || recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 128849018880,
+                            "code": "RET",
+                            "line_number": 133,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                },
+                {
+                    "nodes": [
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771115,
+                            "code": "data[dataLen + recvResult / sizeof(char)]",
+                            "line_number": 173,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476770,
+                            "code": "data",
+                            "line_number": 175,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476774,
+                            "code": "data",
+                            "line_number": 180,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771105,
+                            "code": "data + dataLen",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771104,
+                            "code": "(char *)(data + dataLen)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771103,
+                            "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476757,
+                            "code": "recvResult",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476763,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476764,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771113,
+                            "code": "recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771111,
+                            "code": "recvResult == -1",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771110,
+                            "code": "recvResult == -1 || recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 128849018880,
+                            "code": "RET",
+                            "line_number": 133,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                },
+                {
+                    "nodes": [
+                        {
+                            "node_id": 30064771105,
+                            "code": "data + dataLen",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771104,
+                            "code": "(char *)(data + dataLen)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771103,
+                            "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476757,
+                            "code": "recvResult",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476763,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476764,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771113,
+                            "code": "recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771111,
+                            "code": "recvResult == -1",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771110,
+                            "code": "recvResult == -1 || recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 128849018880,
+                            "code": "RET",
+                            "line_number": 133,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                },
+                {
+                    "nodes": [
+                        {
+                            "node_id": 68719476760,
+                            "code": "dataLen",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771105,
+                            "code": "data + dataLen",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771104,
+                            "code": "(char *)(data + dataLen)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771103,
+                            "code": "recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476757,
+                            "code": "recvResult",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476763,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476764,
+                            "code": "recvResult",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771113,
+                            "code": "recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771111,
+                            "code": "recvResult == -1",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771110,
+                            "code": "recvResult == -1 || recvResult == 0",
+                            "line_number": 168,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 128849018880,
+                            "code": "RET",
+                            "line_number": 133,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                }
+            ],
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "ast_parent_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                "ast_parent_type": "TYPE_DECL",
+                "code": "void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}",
+                "column_number": 1,
+                "column_number_end": 1,
+                "filename": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c",
+                "full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": false,
+                "line_number": 133,
+                "line_number_end": 197,
+                "offset": null,
+                "offset_end": null,
+                "order": 1,
+                "signature": "void()",
+                "index": -1
+            }
+        },
+        {
+            "flows": [
+                {
+                    "nodes": [
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476779,
+                            "code": "data",
+                            "line_number": 196,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                },
+                {
+                    "nodes": [
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 30064771115,
+                            "code": "data[dataLen + recvResult / sizeof(char)]",
+                            "line_number": 173,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476770,
+                            "code": "data",
+                            "line_number": 175,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476774,
+                            "code": "data",
+                            "line_number": 180,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476759,
+                            "code": "data",
+                            "line_number": 167,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        },
+                        {
+                            "node_id": 68719476779,
+                            "code": "data",
+                            "line_number": 196,
+                            "method_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad"
+                        }
+                    ]
+                }
+            ],
+            "source": {
+                "name": "recv",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "recv",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 2
+            },
+            "sink": {
+                "name": "execl",
+                "ast_parent_full_name": "<global>",
+                "ast_parent_type": "NAMESPACE_BLOCK",
+                "code": "<empty>",
+                "column_number": null,
+                "column_number_end": null,
+                "filename": "<empty>",
+                "full_name": "execl",
+                "generic_signature": "<empty>",
+                "hash_value": null,
+                "is_external": true,
+                "line_number": null,
+                "line_number_end": null,
+                "offset": null,
+                "offset_end": null,
+                "order": 0,
+                "signature": "",
+                "index": 4
+            }
+        }
+    ]
+}

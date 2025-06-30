@@ -201,7 +201,7 @@ class Function:
         """
         function_info = f"Function Name: {self.name}\n"
         function_info += f"Full Name: {self.full_name}\n"
-        function_info += f"Signature: {self.signature or 'N/A'}\n"
+        function_info += f"Signature: {self.full_signature}\n"
         function_info += f"File: {self.filename or 'N/A'}\n"
         function_info += f"code: {self.code or 'N/A'}\n"
         function_info += f"useage: {self.useage or 'N/A'}\n"
@@ -223,7 +223,8 @@ class Function:
         暂时决定key值由 fullname+sigenature组成。
         :return: 函数信息字符串
         """
-        info = f"full_name: {self.full_name or 'N/A'}\n"
+        info = f"key: {self.get_function_key()}"
+        info += f"full_name: {self.full_name or 'N/A'}\n"
         info += f"Signature: {self.get_full_signature() or 'N/A'}\n"
         info += f"Usage Query: {self.useage or 'N/A'}\n"
         return info
@@ -234,9 +235,9 @@ class Function:
         :return: Joern查询命令字符串
         """
         if self.full_name:
-            query = f'''cpg.method.fullName("{self.full_name}").callIn.astParent.code.toJsonPretty'''
+            query = f'''cpg.method.fullNameExact("{self.full_name}").callIn.astParent.code.toJsonPretty'''
         else:
-            query = f'''cpg.method.fullName("{self.name}").callIn.astParent.code.toJsonPretty'''
+            query = f'''cpg.method.fullNameExact("{self.name}").callIn.astParent.code.toJsonPretty'''
         return query
 
 
@@ -246,7 +247,7 @@ class Function:
         :return: Joern查询命令字符串
         """
         if self.full_name:
-            query = f'cpg.method.fullName("{self.full_name}").parameter.toJsonPretty'
+            query = f'cpg.method.fullNameExact("{self.full_name}").parameter.toJsonPretty'
         else:
             query = f'cpg.method.name("{self.name}").parameter.toJsonPretty'
         return query
@@ -257,7 +258,7 @@ class Function:
         生成函数签名的Joern查询命令
         :return: Joern查询命令字符串
         """
-        commands = f"""cpg.method.fullName("{self.full_name}").map {{ m => 
+        commands = f"""cpg.method.fullNameExact("{self.full_name}").map {{ m => 
         s"${{m.methodReturn.typeFullName}} ${{m.name}}(${{m.parameter.map(_.typeFullName).mkString(", ")}})" 
         }}.toJsonPretty"""
 
@@ -302,7 +303,7 @@ class Function:
         :param function: 函数对象
         :return: 查询命令字符串
         """
-        query = f'cpg.call.where(_.methodFullName("{self.full_name}")).argument({index}).ast.l'
+        query = f'cpg.call("{self.full_name}").argument({index}).ast.l'
         return query
 
     def findParameterIn(self,index) -> str:
@@ -311,7 +312,7 @@ class Function:
         :param function: 函数对象
         :return: 查询命令字符串
         """
-        query = f'cpg.methodParameterIn.where(_.method.fullName("{self.full_name}")).index({index}).l'
+        query = f'cpg.methodParameterIn.where(_.method.fullNameExact("{self.full_name}")).index({index}).l'
         return query
 
     def findArgumentIn(self,index) -> str:

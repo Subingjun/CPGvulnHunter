@@ -29,7 +29,7 @@ class QuickPass():
 
 
     def __init__(self, cpg: CPG):
-        self.name = "bassPass"
+        self.name = "quickpass"
         self.cpg:CPG = cpg
         self.target_functions: List[Function] = self.cpg.functions  # 存储分析目标的函数列表
         self.dataFlowResults: list[DataFlowResult] = []
@@ -42,7 +42,7 @@ class QuickPass():
         self.sinks: list[Sink] = []
         self.sanitizers: list[Function] = []  
         self.cacher = LLMCacher.get_instance()  # 获取LLM缓存实例
-
+        self.vulnerabilitiesResults = []
 
 
     def find_potential_target(self):
@@ -54,21 +54,6 @@ class QuickPass():
         function_list :list[Function] = self.target_functions
         #十个一组，传给大模型进行第一阶段分析
         batch_size = 10
-        #先寻找缓存
-        for function in function_list:
-            function_key = function.get_function_key()
-            cache = self.cacher.find_function_analysis_cache(function)
-            if cache:
-                self.logger.debug(f"命中缓存，函数 {function.full_name} 的分析结果已存在")
-                if cache.get('source', False):
-                    self.potential_source_dict[function.get_function_key()] = function
-                if cache.get('sink', False):
-                    self.potential_sink_dict[function.get_function_key()] = function
-                if cache.get('sanitizer', False):
-                    self.potential_santizer_dict[function.get_function_key()] = function
-                continue
-
-
         for i in range(0, len(function_list), batch_size):
             batch = function_list[i:i + batch_size]
             request = self.build_classify_method_request(batch)
@@ -103,12 +88,15 @@ class QuickPass():
                     self.potential_sink_dict[function_key] = function
                 if isSanitizer:
                     self.potential_santizer_dict[function_key] = function
-        self.logger.info(f"潜在的source函数数量: {len(self.potential_source_dict)}")
-        self.logger.info(f"潜在的sink函数数量: {len(self.potential_sink_dict)}")
-        self.logger.info(f"潜在的sanitizer函数数量: {len(self.potential_santizer_dict)}")
+        self.logger.debug(f"潜在的source函数: {self.potential_source_dict}")
+        self.logger.debug(f"潜在的sink函数: {self.potential_sink_dict}")
+        self.logger.debug(f"潜在的sanitizer函数: {self.potential_santizer_dict}")
         return {'source': self.potential_source_dict,
                 'sink': self.potential_sink_dict,
                 'sanitizer': self.potential_santizer_dict}
+
+        
+
 
     def string_to_boolean(self, value: str) -> bool:
         """将字符串转换为布尔值"""
@@ -156,8 +144,8 @@ class QuickPass():
                 self.logger.warning(f"LLM确认结果为空或格式不正确: {response}")
                 continue
             if response.get('source', False):
-                self.logger.info(f"确认函数 {source.full_name} 为source")
                 index = response.get('parameter_index', -1)
+                self.logger.info(f"确认函数 {source.full_name} 为source，参数为 {index}")
                 self.sources.append(Source.create_from_function(source,index=index))
         for sink in self.potential_sink_dict.values():
             request = self.build_sink_confirm_request(sink)
@@ -166,8 +154,8 @@ class QuickPass():
                 self.logger.warning(f"LLM确认结果为空或格式不正确: {response}")
                 continue
             if response.get('sink', False):
-                self.logger.info(f"确认函数 {sink.full_name} 为sink")
                 index = response.get('parameter_index')
+                self.logger.info(f"确认函数 {sink.full_name} 为sink,参数为{index}")
                 self.sinks.append(Sink.create_from_function(sink,index=index))
 
 
@@ -180,7 +168,7 @@ class QuickPass():
             函数信息如下：
             {func.generateFunctionInfo()}
             请确认该函数的角色，并返回一个json对象，包含以下字段：
-            { {
+            {{
                 "key": "{func.get_function_key()}",
                 "function_full_name": "{func.full_name}",
                 "source": "true/false",
@@ -393,11 +381,9 @@ class QuickPass():
         self.logger.info(f"源函数列表: {[source.full_name for source in self.sources]}")
         self.logger.info(f"汇聚点函数列表: {[sink.full_name for sink in self.sinks]}")
         self.logger.info(f"清理函数列表: {[sanitizer.full_name for sanitizer in self.sanitizers]}")
-        # # 对每个源-汇聚点对执行数据流分析
-        # self.taint_analysis()#污点分析
-        # self.vuln_analysis()#污点分析结果交给大模型分析
-        # self._save_results(output_path)
-        # 返回漏洞发现结果
+        self.taint_analysis()
+        self.vuln_analysis()
+        self._save_results(output_path)
         return self.get_analysis_results()
 
 

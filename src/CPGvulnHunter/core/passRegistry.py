@@ -10,7 +10,8 @@ class PassRegistry:
     _registry: Dict[str, str] = {"init": "CPGvulnHunter.passes.initPass.InitPass",
                                  "cwe78": "CPGvulnHunter.passes.cwe78.CWE78",
                                  "easyPass": "CPGvulnHunter.passes.easyPass.EasyPass",
-                                 "quickPass": "CPGvulnHunter.passes.quickPass.QuickPass"
+                                 "quickPass": "CPGvulnHunter.passes.quickPass.QuickPass",
+                                 "quickCWE78" : "CPGvulnHunter.passes.quickCWE78.QuickCWE78"
                                 }
     _loaded_classes: Dict[str, Type[BasePass]] = {}
     _logger = None  # 延迟初始化

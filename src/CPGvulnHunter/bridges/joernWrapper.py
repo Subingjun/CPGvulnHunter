@@ -103,7 +103,7 @@ class JoernWrapper():
         :param cpg_var: CPG variable name, default is "cpg"
         :return: Function object or None if not found
         """
-        cmd = f'{cpg_var}.method.fullName("{function_full_name}").toJsonPretty'
+        cmd = f'{cpg_var}.method.fullNameExact("{function_full_name}").toJsonPretty'
         data = self._execute_command(cmd)
         if data:
             # 如果是列表，取第一个

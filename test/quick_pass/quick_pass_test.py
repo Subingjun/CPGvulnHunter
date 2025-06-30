@@ -14,7 +14,6 @@ class QuickPassTest():
         self.cpg = MockCpg().cpg
         self.qp = QuickPass(cpg=self.cpg)
    
-   
     def run(self):
         result  = self.qp.find_potential_target()
         print("快速通过测试结果:")
@@ -25,6 +24,7 @@ class QuickPassTest():
         self.qp.confirm_potential()
         self.qp.taint_analysis()
         self.qp.vuln_analysis()
+        self.qp._save_results("/home/nstl/data/CPGvulnHunter/test/quick_pass/log")
 
 if __name__ == "__main__":
     qp_test = QuickPassTest()

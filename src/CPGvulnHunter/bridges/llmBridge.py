@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional, Union
 from openai import OpenAI
 
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
-from CPGvulnHunter.utils.logger_config import LoggerConfigurator
+from CPGvulnHunter.utils.threadLogger import get_thread_logger
 from CPGvulnHunter.utils.uitils import extract_json
 from CPGvulnHunter.utils.llmCacher import LLMCacher
 """
@@ -29,10 +29,9 @@ class LLMBridge:
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
-        self.logger = LoggerConfigurator.get_thread_logger()
+        self.logger = get_thread_logger()
         self.cacher = LLMCacher.get_instance()
         # Ensure logger uses the level from config
-        self.logger.setLevel(logging.getLogger().level)
         
         # 请求统计
         self._total_requests = 0
@@ -51,21 +50,23 @@ class LLMBridge:
         self._total_requests += 1
         
         messages = request.to_messages()
-        
+        self.logger.debug("向大模型发送请求：")
+        self.logger.debug(messages)
         #如果命中缓存，则直接返回
         cache = self.cacher.find_request_cache(messages)
         if cache:
-            self.logger.debug("命中缓存，直接返回结果")
+            self.logger.debug("命中缓存，直接返回结果:\n")
             self.logger.debug(cache)
             return cache
             
         # 发送LLM请求
-        self.logger.debug("发送LLM请求")
         response_text = self.chat_completion(messages, model=self.model)
         
         self.logger.debug(response_text)
         json_result = extract_json(response_text)
         self.cacher.add_request_cache(messages, json_result)
+        self.logger.debug("收到大模型回复：\n")
+        self.logger.debug(json_result)
         return json_result
 
 
