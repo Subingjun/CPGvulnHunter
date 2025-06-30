@@ -96,6 +96,7 @@ class CWE78(BasePass):
 
         return LLMRequest(system_content=system_content, prompt=user_content)
 
+
     def build_dataflow_analysis_request(self, path: FlowPath) -> LLMRequest:
         """构建数据流分析的提示"""
         system_content = """你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。

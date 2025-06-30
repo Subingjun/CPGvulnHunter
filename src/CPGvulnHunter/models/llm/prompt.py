@@ -19,7 +19,7 @@ class FunctionPrompt:
     @staticmethod
     def _build_semantic_analysis_prompt(func: Function) -> str:
         """构建语义分析提示词"""
-        function_info = f"函数名: {func.full_name}\n函数签名: {func.get_sigenature() or '未知签名'}\n"
+        function_info = f"函数名: {func.full_name}\n函数签名: {func.get_full_signature() or '未知签名'}\n"
         function_useage = f"函数用法: {func.useage or '无描述'}"
 
         return f"""请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。

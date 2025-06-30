@@ -61,7 +61,7 @@ class EasyPass:
                         # 添加函数基本信息到结果中
                         analysis_result['function_name'] = function.full_name
                         analysis_result['file_location'] = f"{getattr(function, 'file_name', '未知文件')}:{getattr(function, 'line_number', '未知行号')}"
-                        analysis_result['function_signature'] = function.get_sigenature() if hasattr(function, 'get_sigenature') else '签名不可用'
+                        analysis_result['function_signature'] = function.get_full_signature() if hasattr(function, 'get_sigenature') else '签名不可用'
                         
                         # 判断是否为漏洞
                         is_vulnerable = analysis_result.get('is_vulnerable', False)

@@ -9,7 +9,9 @@ class PassRegistry:
     
     _registry: Dict[str, str] = {"init": "CPGvulnHunter.passes.initPass.InitPass",
                                  "cwe78": "CPGvulnHunter.passes.cwe78.CWE78",
-                                 "easyPass": "CPGvulnHunter.passes.easyPass.EasyPass"}
+                                 "easyPass": "CPGvulnHunter.passes.easyPass.EasyPass",
+                                 "quickPass": "CPGvulnHunter.passes.quickPass.QuickPass"
+                                }
     _loaded_classes: Dict[str, Type[BasePass]] = {}
     _logger = None  # 延迟初始化
     
@@ -72,10 +74,7 @@ class PassRegistry:
             module_path, class_name = class_path.rsplit('.', 1)
             module = importlib.import_module(module_path)
             pass_class = getattr(module, class_name)
-            
-            # 验证是否是BasePass的子类
-            if not issubclass(pass_class, BasePass):
-                raise ValueError(f"Pass类 {class_path} 不是BasePass的子类")
+
             
             # 缓存加载的类
             cls._loaded_classes[pass_name] = pass_class

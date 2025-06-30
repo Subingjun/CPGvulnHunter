@@ -30,7 +30,7 @@ class LLMBridge:
         self.api_key = api_key
         self.model = model
         self.logger = LoggerConfigurator.get_thread_logger()
-        self.cacher = LLMCacher(cache_file="./llm_cache/llm_cache.json")
+        self.cacher = LLMCacher.get_instance()
         # Ensure logger uses the level from config
         self.logger.setLevel(logging.getLogger().level)
         
@@ -53,7 +53,7 @@ class LLMBridge:
         messages = request.to_messages()
         
         #如果命中缓存，则直接返回
-        cache = self.cacher.find_cache(messages)
+        cache = self.cacher.find_request_cache(messages)
         if cache:
             self.logger.debug("命中缓存，直接返回结果")
             self.logger.debug(cache)
@@ -65,7 +65,7 @@ class LLMBridge:
         
         self.logger.debug(response_text)
         json_result = extract_json(response_text)
-        self.cacher.add_cache(messages, json_result)
+        self.cacher.add_request_cache(messages, json_result)
         return json_result
 
 

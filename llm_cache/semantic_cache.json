@@ -1,700 +1,704 @@
 {
-  "ANY strlen(ANY)": {
-    "method": "strlen",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY socket(ANY, ANY, ANY)": {
-    "method": "socket",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      },
-      {
-        "from_param": 3,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY memset(ANY, ANY, ANY)": {
-    "method": "memset",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      },
-      {
-        "from_param": 3,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY inet_addr(ANY)": {
-    "method": "inet_addr",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY htons(ANY)": {
-    "method": "htons",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY connect(ANY, ANY, ANY)": {
-    "method": "connect",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      },
-      {
-        "from_param": 3,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY recv(ANY, ANY, ANY, ANY)": {
-    "method": "recv",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 4,
-        "to_param": 4
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      },
-      {
-        "from_param": 3,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strchr(ANY, ANY)": {
-    "method": "strchr",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY close(ANY)": {
-    "method": "close",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY execl(ANY, ANY, ANY, ANY, ANY)": {
-    "method": "execl",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 4,
-        "to_param": 4
-      },
-      {
-        "from_param": 5,
-        "to_param": 5
-      },
-      {
-        "from_param": 4,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strcat(ANY, ANY)": {
-    "method": "strcat",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY srand(ANY)": {
-    "method": "srand",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY time(ANY)": {
-    "method": "time",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY MAX_BUFFER(ANY)": {
-    "method": "command.c:6:6:MAX_BUFFER:0",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY printf(ANY, ANY)": {
-    "method": "printf",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY fgets(ANY, ANY, ANY)": {
-    "method": "fgets",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 3,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strcpy(ANY, ANY)": {
-    "method": "strcpy",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strstr(ANY, ANY)": {
-    "method": "strstr",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strcmp(ANY, ANY)": {
-    "method": "strcmp",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY system(ANY)": {
-    "method": "system",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY getenv(ANY)": {
-    "method": "getenv",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY strncat(ANY, ANY, ANY)": {
-    "method": "strncat",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _execv(ANY, ANY)": {
-    "method": "_execv",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY execlp(ANY, ANY, ANY, ANY, ANY)": {
-    "method": "execlp",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 4,
-        "to_param": 4
-      },
-      {
-        "from_param": 5,
-        "to_param": 5
-      },
-      {
-        "from_param": 4,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY popen(ANY, ANY)": {
-    "method": "popen",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY pclose(ANY)": {
-    "method": "pclose",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 1,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY exit(ANY)": {
-    "method": "exit",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _execvp(ANY, ANY)": {
-    "method": "_execvp",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 2,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _spawnlp(ANY, ANY, ANY, ANY, ANY, ANY)": {
-    "method": "_spawnlp",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 4,
-        "to_param": 4
-      },
-      {
-        "from_param": 5,
-        "to_param": 5
-      },
-      {
-        "from_param": 6,
-        "to_param": 6
-      },
-      {
-        "from_param": 5,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _spawnv(ANY, ANY, ANY)": {
-    "method": "_spawnv",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 3,
-        "to_param": 1
-      },
-      {
-        "from_param": 3,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _spawnvp(ANY, ANY, ANY)": {
-    "method": "_spawnvp",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 3,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY _spawnl(ANY, ANY, ANY, ANY, ANY, ANY)": {
-    "method": "_spawnl",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 3,
-        "to_param": 3
-      },
-      {
-        "from_param": 4,
-        "to_param": 4
-      },
-      {
-        "from_param": 5,
-        "to_param": 5
-      },
-      {
-        "from_param": 6,
-        "to_param": 6
-      },
-      {
-        "from_param": 5,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  },
-  "ANY scanf(ANY, ANY)": {
-    "method": "scanf",
-    "param_flows": [
-      {
-        "from_param": 1,
-        "to_param": 1
-      },
-      {
-        "from_param": 2,
-        "to_param": 2
-      },
-      {
-        "from_param": 2,
-        "to_param": -1
-      }
-    ],
-    "is_regex": false
-  }
+    "ANY strlen(ANY)": {
+        "method": "strlen",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY socket(ANY, ANY, ANY)": {
+        "method": "socket",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            },
+            {
+                "from_param": 3,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY memset(ANY, ANY, ANY)": {
+        "method": "memset",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            },
+            {
+                "from_param": 3,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY inet_addr(ANY)": {
+        "method": "inet_addr",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY htons(ANY)": {
+        "method": "htons",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY connect(ANY, ANY, ANY)": {
+        "method": "connect",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            },
+            {
+                "from_param": 3,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY recv(ANY, ANY, ANY, ANY)": {
+        "method": "recv",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 4,
+                "to_param": 4
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            },
+            {
+                "from_param": 3,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strchr(ANY, ANY)": {
+        "method": "strchr",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY close(ANY)": {
+        "method": "close",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY execl(ANY, ANY, ANY, ANY, ANY)": {
+        "method": "execl",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 4,
+                "to_param": 4
+            },
+            {
+                "from_param": 5,
+                "to_param": 5
+            },
+            {
+                "from_param": 4,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strcat(ANY, ANY)": {
+        "method": "strcat",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY srand(ANY)": {
+        "method": "srand",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY time(ANY)": {
+        "method": "time",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY MAX_BUFFER(ANY)": {
+        "method": "command.c:6:6:MAX_BUFFER:0",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY printf(ANY, ANY)": {
+        "method": "printf",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY fgets(ANY, ANY, ANY)": {
+        "method": "fgets",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 3,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strcpy(ANY, ANY)": {
+        "method": "strcpy",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strstr(ANY, ANY)": {
+        "method": "strstr",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strcmp(ANY, ANY)": {
+        "method": "strcmp",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY system(ANY)": {
+        "method": "system",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY getenv(ANY)": {
+        "method": "getenv",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY strncat(ANY, ANY, ANY)": {
+        "method": "strncat",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _execv(ANY, ANY)": {
+        "method": "_execv",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY execlp(ANY, ANY, ANY, ANY, ANY)": {
+        "method": "execlp",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 4,
+                "to_param": 4
+            },
+            {
+                "from_param": 5,
+                "to_param": 5
+            },
+            {
+                "from_param": 4,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY popen(ANY, ANY)": {
+        "method": "popen",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY pclose(ANY)": {
+        "method": "pclose",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY exit(ANY)": {
+        "method": "exit",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _execvp(ANY, ANY)": {
+        "method": "_execvp",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 2,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _spawnlp(ANY, ANY, ANY, ANY, ANY, ANY)": {
+        "method": "_spawnlp",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 4,
+                "to_param": 4
+            },
+            {
+                "from_param": 5,
+                "to_param": 5
+            },
+            {
+                "from_param": 6,
+                "to_param": 6
+            },
+            {
+                "from_param": 5,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _spawnv(ANY, ANY, ANY)": {
+        "method": "_spawnv",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 3,
+                "to_param": 1
+            },
+            {
+                "from_param": 3,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _spawnvp(ANY, ANY, ANY)": {
+        "method": "_spawnvp",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 3,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY _spawnl(ANY, ANY, ANY, ANY, ANY, ANY)": {
+        "method": "_spawnl",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 3,
+                "to_param": 3
+            },
+            {
+                "from_param": 4,
+                "to_param": 4
+            },
+            {
+                "from_param": 5,
+                "to_param": 5
+            },
+            {
+                "from_param": 6,
+                "to_param": 6
+            },
+            {
+                "from_param": 5,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    },
+    "ANY scanf(ANY, ANY)": {
+        "method": "scanf",
+        "param_flows": [
+            {
+                "from_param": 1,
+                "to_param": 1
+            },
+            {
+                "from_param": 2,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": 2
+            },
+            {
+                "from_param": 1,
+                "to_param": -1
+            }
+        ],
+        "is_regex": false
+    }
 }

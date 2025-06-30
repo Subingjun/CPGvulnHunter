@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import hashlib
 from typing import Optional
 
 @dataclass
@@ -29,26 +30,33 @@ class Function:
     signature: Optional[str] = None
     parameters: Optional[list['Parameter']] = None  # 函数参数列表
     useage : Optional[str] = None  # 函数调用点，用来丰富给大模型的信息
-    
-    def get_sigenature(self) -> str:
+    full_signature: Optional[str] = None  # 完整的函数签名，包括返回值和参数类型
+
+
+
+    def set_full_signature(self, signature: str):
+        self.full_signature = signature
+        return True
+
+    def get_full_signature(self) -> str:
         """
-        生成函数签名
+        这里有点麻烦,因为语言之间的差别joern的表现不统一。
+        对于c来说，内部函数有siganture，外部函数没有（这里和没有进行完整的预处理也有关系。）
+        对于Java来说，内部函数和外部函数都有返回值
+        我希望他们用一种相对统一的方式
         :return: 函数签名字符串
         """
-        if self.signature:
-            return self.signature
+        # # 如果没有signature，尝试根据参数生成
+        # param_types = []
+        # if self.parameters:
+        #     for param in sorted(self.parameters, key=lambda p: p.index or 0):
+        #         param_types.append(param.type_full_name or 'ANY')
         
-        # 如果没有signature，尝试根据参数生成
-        param_types = []
-        if self.parameters:
-            for param in sorted(self.parameters, key=lambda p: p.index or 0):
-                param_types.append(param.type_full_name or 'ANY')
-        
-        param_str = ', '.join(param_types)
-        # 尝试从现有信息推断返回类型
-        return_type = 'ANY'
-        sigenature = f"{return_type} {self.name}({param_str})"
-        return sigenature
+        # param_str = ', '.join(param_types)
+        # # 尝试从现有信息推断返回类型
+        # return_type = 'ANY'
+        # sigenature = f"{return_type} {self.full_name}({param_str})"
+        return self.full_signature
     
     def set_parameters(self, parameters: list['Parameter']):
         self.parameters = parameters
@@ -198,7 +206,27 @@ class Function:
         function_info += f"code: {self.code or 'N/A'}\n"
         function_info += f"useage: {self.useage or 'N/A'}\n"
         return function_info
-        
+
+
+
+    def get_function_key(self) -> str:
+        """返回函数的唯一表示，可以用于缓存"""
+        sig =self.get_full_signature()
+        key_hash = hashlib.sha256(sig.encode('utf-8')).hexdigest()
+        return key_hash
+
+    def to_llm_info(self) -> str:
+        """
+        生成函数信息字符串，供LLM使用
+        需要一个key指来指定函数的唯一性。
+        需要有方法名签名等信息。对于c函数来说，fullname不包含参数和返回值信息。
+        暂时决定key值由 fullname+sigenature组成。
+        :return: 函数信息字符串
+        """
+        info = f"full_name: {self.full_name or 'N/A'}\n"
+        info += f"Signature: {self.get_full_signature() or 'N/A'}\n"
+        info += f"Usage Query: {self.useage or 'N/A'}\n"
+        return info
 
     def generateUseageQuery(self) -> str:
         """
@@ -224,21 +252,23 @@ class Function:
         return query
 
 
-    def generateSignature(self) -> str:
+    def generateSignatureQuery(self) -> str:
         """
         生成函数签名的Joern查询命令
         :return: Joern查询命令字符串
         """
-        if self.full_name:
-            commands = f"""cpg.method.fullName("{self.full_name}").map {{ m => 
-            s"${{m.methodReturn.typeFullName}} ${{m.name}}(${{m.parameter.map(_.typeFullName).mkString(", ")}})" 
-            }}.l"""
-        else:
-            commands = f"""cpg.method.name("{self.name}").map {{ m => 
-            s"${{m.methodReturn.typeFullName}} ${{m.name}}(${{m.parameter.map(_.typeFullName).mkString(", ")}})" 
-            }}.l"""
+        commands = f"""cpg.method.fullName("{self.full_name}").map {{ m => 
+        s"${{m.methodReturn.typeFullName}} ${{m.name}}(${{m.parameter.map(_.typeFullName).mkString(", ")}})" 
+        }}.toJsonPretty"""
+
         return commands
     
+    def generateReturnTypeQuery(self) -> str:
+        """
+        
+        """
+        return ''
+
     def getSignature(self) -> str:
         """
         根据当前函数对象生成函数签名字符串（本地生成，不依赖Joern查询）

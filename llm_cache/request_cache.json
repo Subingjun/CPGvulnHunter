@@ -1,0 +1,1169 @@
+{
+    "02bd1fd74a71d4fc96c37be8a11b1a19": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: strlen\n函数签名: ANY strlen(ANY)\n\n函数用法: dataLen = strlen(data)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"strlen\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "strlen",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "strlen函数的数据流分析表明，参数1（str）的内容直接影响返回值（-1），因此需要包含参数1到返回值的传递。同时，为了确保污点分析的连续性，参数1必须包含自传递映射。"
+            }
+        }
+    },
+    "657c6bfd14f6692138925583e124c345": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: socket\n函数签名: ANY socket(ANY, ANY, ANY)\n\n函数用法: connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"socket\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "socket",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    },
+                    {
+                        "from": 2,
+                        "to": -1
+                    },
+                    {
+                        "from": 3,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "The socket function's parameters (domain, type, protocol) influence the returned socket descriptor. Each parameter is passed through to itself to maintain taint continuity, and all parameters can affect the return value, hence the mappings from each parameter to the return value."
+            }
+        }
+    },
+    "2087d80ad69ec47d7fa4dc72bde63a56": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: memset\n函数签名: ANY memset(ANY, ANY, ANY)\n\n函数用法: {\n# 93 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execlp_64/CWE78_OS_Command_Injection__char_connect_socket_execlp_64a.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"memset\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "memset",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 3,
+                        "to": 3
+                    },
+                    {
+                        "from": 2,
+                        "to": 1
+                    },
+                    {
+                        "from": 3,
+                        "to": 1
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "memset函数将第二个参数的值填充到第一个参数指向的内存区域，填充的长度由第三个参数指定。因此，数据从参数2和参数3流向参数1。同时，参数1的内容会影响返回值，即填充后的内存区域的起始地址。所有参数都需要透传以保持污点分析的连续性。"
+            }
+        }
+    },
+    "454a6697902b72ae7c1961d7f7f1647d": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一位资深的程序静态分析专家，专精于代码语义理解和数据流分析。你具备深厚的漏洞挖掘经验，能够准确识别函数间的数据流动模式，并为Joern静态分析框架生成精确的语义规则。\n\n**重要提示：请严格按照要求，只返回JSON格式的结果，不要包含任何解释文字、说明文档或代码块标记。**"
+            },
+            {
+                "role": "user",
+                "content": "请为以下函数生成Joern静态分析框架所需的语义规则，重点分析参数间的数据流动关系。\n\n## 目标函数信息\n函数名: scanf\n函数签名: ANY scanf(ANY, ANY)\n\n函数用法: {\n    printf(\"Enter a number: \");\n    int value;\n    scanf(\"%d\", &value);\n    return value;\n}\n\n## 分析任务\n1. **数据流分析**: 识别函数参数之间的数据传递关系\n2. **污点传播**: 确定哪些参数会将数据传递给其他参数或返回值\n3. **参数透传**: 确保污点在函数调用过程中不会断掉\n4. **语义规则生成**: 生成符合Joern框架的参数流映射规则\n\n## 参数索引约定\n- **-1**: 函数返回值\n- **0**: 对象实例本身（this/self，适用于面向对象方法）\n- **1, 2, 3...**: 函数参数按顺序编号（从1开始）\n\n## 数据流分析原则\n**重要：数据流表示的是污点数据的传播方向，包括参数间传递、参数透传和参数到返回值的传递**\n\n### 数据流类型说明：\n\n#### 1. 参数透传 (Parameter Pass-Through) - **必须包含**\n**关键：为了确保污点分析的连续性，每个可能被污染的参数都必须包含自传递映射**\n- 所有可能携带污点的参数都需要透传给自身，防止污点链断裂\n- `{\"from\": 1, \"to\": 1}` - 参数1透传给自身\n- `{\"from\": 2, \"to\": 2}` - 参数2透传给自身\n- `{\"from\": 3, \"to\": 3}` - 参数3透传给自身\n\n**示例**：`strcpy(dest, src)`\n- 必须包含：`{\"from\": 1, \"to\": 1}` (dest透传) 和 `{\"from\": 2, \"to\": 2}` (src透传)\n\n#### 2. 参数间传递 (Parameter-to-Parameter Flow)\n- **输入函数**（如 `fgets`, `scanf`, `read`）: 从数据源流向目标缓冲区\n  - `fgets(buffer, size, stream)`: 数据从 stream(参数3) 流向 buffer(参数1)\n  - 流向: `{\"from\": 3, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}`\n\n- **复制函数**（如 `strcpy`, `memcpy`）: 从源流向目标  \n  - `strcpy(dest, src)`: 数据从 src(参数2) 流向 dest(参数1)\n  - 流向: `{\"from\": 2, \"to\": 1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n\n#### 3. 参数到返回值传递 (Parameter-to-Return Flow)\n- **查询/计算函数**（如 `strlen`, `strcmp`, `strstr`）: 参数内容影响返回值\n  - `strlen(str)`: 参数1的内容决定返回值\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n  \n- **分配函数**（如 `malloc`, `calloc`）: 参数决定分配大小，返回分配的内存\n  - `malloc(size)`: 参数1影响返回的内存\n  - 流向: `{\"from\": 1, \"to\": -1}`\n  - **必须添加透传**: `{\"from\": 1, \"to\": 1}`\n\n#### 4. 完整的数据流映射 (Complete Flow Mapping)\n对于复杂函数，需要包含所有相关的数据流：\n\n- **格式化函数** `sprintf(buffer, format, arg1, arg2, ...)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}, {\"from\": 3, \"to\": 3}, {\"from\": 4, \"to\": 4}`\n  - 格式字符串到缓冲区: `{\"from\": 2, \"to\": 1}`\n  - 参数到缓冲区: `{\"from\": 3, \"to\": 1}, {\"from\": 4, \"to\": 1}`\n  - 参数到返回值: `{\"from\": 2, \"to\": -1}, {\"from\": 3, \"to\": -1}, {\"from\": 4, \"to\": -1}`\n\n- **搜索函数** `strstr(haystack, needle)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n- **比较函数** `strcmp(str1, str2)`:\n  - 参数透传: `{\"from\": 1, \"to\": 1}, {\"from\": 2, \"to\": 2}`\n  - 两个参数都影响返回值: `{\"from\": 1, \"to\": -1}, {\"from\": 2, \"to\": -1}`\n\n## 数据流表示规范\n- **from**: 源参数索引（数据来源）\n- **to**: 目标参数索引（数据去向）\n- **必须包含所有相关的数据流路径，特别是参数透传映射**\n\n### 参数透传规则（关键！）：\n1. **所有输入参数都必须包含自传递映射** (1→1, 2→2, 3→3, ...)\n2. **输出参数（被修改的参数）也必须包含自传递映射**\n3. **即使参数只是用于控制逻辑，也可能需要透传以保持污点连续性**\n\n### 常见数据流模式总结：\n1. **输入类**: `参数透传` + `外部源 → 缓冲区` + `外部源 → 返回值`\n2. **复制类**: `参数透传` + `源参数 → 目标参数` + `源参数 → 返回值`\n3. **查询类**: `参数透传` + `所有输入参数 → 返回值`\n4. **修改类**: `参数透传` + `输入参数 → 返回值`\n\n## 特殊情况处理\n- 如果函数不涉及数据传递，仍需考虑参数透传映射\n- 如果函数有多个数据流路径，**必须包含所有相关的流向和透传**\n- 优先考虑安全关键的数据流（可能导致漏洞的流向）\n- **绝对不能遗漏参数透传映射，这会导致污点分析断链**\n\n## 严格要求\n**请直接返回以下JSON格式的内容，不要添加任何解释文字、前言、后缀说明或代码块标记（如```json）：**\n\n{\n    \"analysis_result\": {\n        \"function_name\": \"scanf\",\n        \"param_flows\": [\n            {\"from\": 源参数索引, \"to\": 目标参数索引},\n            {\"from\": 源参数索引, \"to\": -1},\n            ...\n        ],\n        \"confidence\": \"high|medium|low\",\n        \"reasoning\": \"数据流分析依据说明，包括参数间传递、参数透传和参数到返回值传递的详细分析\"\n    }\n}\n\n## 示例分析\n\n### 示例1: `strcpy(dest, src)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // dest透传（必须）\n    {\"from\": 2, \"to\": 2},  // src透传（必须）\n    {\"from\": 2, \"to\": 1},  // src → dest\n    {\"from\": 2, \"to\": -1}  // src → 返回值\n]\n```\n\n### 示例2: `strlen(str)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str透传（必须）\n    {\"from\": 1, \"to\": -1}  // str → 返回值\n]\n```\n\n### 示例3: `sprintf(buffer, format, arg1, arg2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},   // buffer透传（必须）\n    {\"from\": 2, \"to\": 2},   // format透传（必须）\n    {\"from\": 3, \"to\": 3},   // arg1透传（必须）\n    {\"from\": 4, \"to\": 4},   // arg2透传（必须）\n    {\"from\": 2, \"to\": 1},   // format → buffer\n    {\"from\": 3, \"to\": 1},   // arg1 → buffer  \n    {\"from\": 4, \"to\": 1},   // arg2 → buffer\n    {\"from\": 2, \"to\": -1},  // format → 返回值\n    {\"from\": 3, \"to\": -1},  // arg1 → 返回值\n    {\"from\": 4, \"to\": -1}   // arg2 → 返回值\n]\n```\n\n### 示例4: `strcmp(str1, str2)`\n```\nparam_flows: [\n    {\"from\": 1, \"to\": 1},  // str1透传（必须）\n    {\"from\": 2, \"to\": 2},  // str2透传（必须）\n    {\"from\": 1, \"to\": -1}, // str1 → 返回值\n    {\"from\": 2, \"to\": -1}  // str2 → 返回值\n]\n```\n\n**再次强调：必须包含所有参数的透传映射（N→N），这是保证污点分析连续性的关键！同时包含所有相关的数据流路径。**"
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "function_name": "scanf",
+                "param_flows": [
+                    {
+                        "from": 1,
+                        "to": 1
+                    },
+                    {
+                        "from": 2,
+                        "to": 2
+                    },
+                    {
+                        "from": 1,
+                        "to": 2
+                    },
+                    {
+                        "from": 1,
+                        "to": -1
+                    }
+                ],
+                "confidence": "high",
+                "reasoning": "scanf函数从第一个参数（格式字符串）读取数据，并将其存储到第二个参数指定的位置。因此，数据从参数1流向参数2。同时，scanf的返回值表示成功读取的项目数，因此参数1也影响返回值。所有参数都需要透传以保持污点分析的连续性。"
+            }
+        }
+    },
+    "f565bb2fa1a651b0d4d06dcfca5e005a": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: dangerous_sink\\nSignature: void dangerous_sink(int)\\nUsage Query: {\\n        dangerous_sink(transferred);  // 潜在的安全问题\\n    }\\n', 'full_name: main.c:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n', 'full_name: safe_sink\\nSignature: void safe_sink(int)\\nUsage Query: {\\n        safe_sink(transferred);\\n    }\\n', 'full_name: main\\nSignature: int main()\\nUsage Query: N/A\\n', 'full_name: get_user_input\\nSignature: int get_user_input()\\nUsage Query: user_data = get_user_input()\\n', 'full_name: source.c:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n', 'full_name: process_data\\nSignature: int process_data(int)\\nUsage Query: processed = process_data(source_data)\\n', 'full_name: get_sensitive_data\\nSignature: char* get_sensitive_data()\\nUsage Query: * sensitive = get_sensitive_data()\\n', 'full_name: process_data<duplicate>0\\nSignature: int process_data(int)\\nUsage Query: N/A\\n', 'full_name: util.c:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "dangerous_sink",
+                    "function_full_name": "dangerous_sink",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "函数名和用法表明这是一个潜在的安全问题点，可能是不安全的接收器。"
+                },
+                {
+                    "key": "main.c:<global>",
+                    "function_full_name": "main.c:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.0,
+                    "reason": "全局作用域，没有具体信息表明其角色。"
+                },
+                {
+                    "key": "safe_sink",
+                    "function_full_name": "safe_sink",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.7,
+                    "reason": "函数名表明这是一个安全的接收器，但需要更多信息确认。"
+                },
+                {
+                    "key": "main",
+                    "function_full_name": "main",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.0,
+                    "reason": "主函数，通常不直接作为source、sink或sanitizer。"
+                },
+                {
+                    "key": "get_user_input",
+                    "function_full_name": "get_user_input",
+                    "source": "true",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "函数名和用法表明这是一个获取用户输入的源。"
+                },
+                {
+                    "key": "source.c:<global>",
+                    "function_full_name": "source.c:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.0,
+                    "reason": "全局作用域，没有具体信息表明其角色。"
+                },
+                {
+                    "key": "process_data",
+                    "function_full_name": "process_data",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.8,
+                    "reason": "函数名和用法表明这可能是一个数据处理函数，可能用于清理或验证数据。"
+                },
+                {
+                    "key": "get_sensitive_data",
+                    "function_full_name": "get_sensitive_data",
+                    "source": "true",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "函数名和用法表明这是一个获取敏感数据的源。"
+                },
+                {
+                    "key": "process_data<duplicate>0",
+                    "function_full_name": "process_data<duplicate>0",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.0,
+                    "reason": "重复的函数签名，没有具体信息表明其角色。"
+                },
+                {
+                    "key": "util.c:<global>",
+                    "function_full_name": "util.c:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.0,
+                    "reason": "全局作用域，没有具体信息表明其角色。"
+                }
+            ]
+        }
+    },
+    "392c3d1565800ebe84756a7354b54196": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: transfer_data\\nSignature: int transfer_data(int)\\nUsage Query: transferred = transfer_data(user_data)\\n', 'full_name: handle_string\\nSignature: void handle_string(char*)\\nUsage Query: {\\n    printf(\"=== 数据流传播测试 ===\\\\n\");\\n    \\n    // 数据流1: 用户输入 -> 传输 -> 危险sink\\n    int user_data = get_user_input();\\n    int transferred = transfer_data(user_data);\\n    \\n    if (validate_data(transferred)) {\\n        safe_sink(transferred);\\n    } else {\\n        dangerous_sink(transferred);  // 潜在的安全问题\\n    }\\n    \\n    // 数据流2: 敏感数据 -> 字符串处理\\n    char* sensitive = get_sensitive_data();\\n    handle_string(sensitive);  // 敏感数据泄露\\n    \\n    printf(\"=== 测试完成 ===\\\\n\");\\n    return 0;\\n}\\n', 'full_name: validate_data\\nSignature: int validate_data(int)\\nUsage Query: if (validate_data(transferred)) {\\n        safe_sink(transferred);\\n    } else {\\n        dangerous_sink(transferred);  // 潜在的安全问题\\n    }\\n', 'full_name: <includes>:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n', 'full_name: printf\\nSignature: ANY printf(ANY, ANY)\\nUsage Query: {\\n    printf(\"SINK: Received potentially dangerous data: %d\\\\n\", data);\\n    // 模拟危险操作，如系统调用、文件写入等\\n}\\n', 'full_name: scanf\\nSignature: ANY scanf(ANY, ANY)\\nUsage Query: {\\n    printf(\"Enter a number: \");\\n    int value;\\n    scanf(\"%d\", &value);\\n    return value;\\n}\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "transfer_data",
+                    "function_full_name": "transfer_data",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.8,
+                    "reason": "该函数用于数据传输，但未直接涉及数据源、数据接收或数据清理。"
+                },
+                {
+                    "key": "handle_string",
+                    "function_full_name": "handle_string",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "该函数处理敏感数据，可能导致数据泄露，因此被视为sink。"
+                },
+                {
+                    "key": "validate_data",
+                    "function_full_name": "validate_data",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.9,
+                    "reason": "该函数用于验证数据，确保数据安全，因此被视为sanitizer。"
+                },
+                {
+                    "key": "<includes>:<global>",
+                    "function_full_name": "<includes>:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.5,
+                    "reason": "全局函数或包含的文件，未明确其角色。"
+                },
+                {
+                    "key": "printf",
+                    "function_full_name": "printf",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.7,
+                    "reason": "该函数用于输出数据，可能泄露信息，被视为sink。"
+                },
+                {
+                    "key": "scanf",
+                    "function_full_name": "scanf",
+                    "source": "true",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "该函数用于获取用户输入，是数据源。"
+                }
+            ]
+        }
+    },
+    "51a36c26daa39f7e41522a341962fad9": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: get_user_input\nFull Name: get_user_input\nSignature: int()\nFile: source.c\ncode: int get_user_input() {\n    printf(\"Enter a number: \");\n    int value;\n    scanf(\"%d\", &value);\n    return value;\n}\nuseage: user_data = get_user_input()\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "get_user_input",
+            "function_full_name": "get_user_input",
+            "source": "true",
+            "parameter": -1,
+            "confidence": 0.9,
+            "reason": "该函数直接从用户输入获取数据，没有进行任何过滤或验证，因此可以被视为一个潜在的输入源（source）。"
+        }
+    },
+    "b00e71cbe4dfd9d176c961468357c467": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: get_sensitive_data\nFull Name: get_sensitive_data\nSignature: char*()\nFile: source.c\ncode: char* get_sensitive_data() {\n    return \"sensitive_password_123\";\n}\nuseage: * sensitive = get_sensitive_data()\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "get_sensitive_data",
+            "function_full_name": "get_sensitive_data",
+            "source": "true",
+            "parameter": -1,
+            "confidence": 0.9,
+            "reason": "该函数直接返回了一个敏感数据字符串，没有进行任何形式的保护或加密，因此可以被视为一个潜在的敏感数据源。"
+        }
+    },
+    "0243ef8d6d0c2379937c2d416a1f7a5c": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: scanf\nFull Name: scanf\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    printf(\"Enter a number: \");\n    int value;\n    scanf(\"%d\", &value);\n    return value;\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "scanf",
+            "function_full_name": "scanf",
+            "source": "true",
+            "parameter": -1,
+            "confidence": 0.9,
+            "reason": "The function 'scanf' is commonly used to read input from the user, making it a potential source of untrusted input which can be exploited if not properly handled."
+        }
+    },
+    "21ec90afae5c0261347b79530fc351d0": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: dangerous_sink\nFull Name: dangerous_sink\nSignature: void(int)\nFile: main.c\ncode: void dangerous_sink(int data) {\n    printf(\"SINK: Received potentially dangerous data: %d\\n\", data);\n    // 模拟危险操作，如系统调用、文件写入等\n}\nuseage: {\n        dangerous_sink(transferred);  // 潜在的安全问题\n    }\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"574a297fea22e3aebd991627a5082a8620acf805a21ef19d36c1b69492360dd6\",\n                \"function_full_name\": \"dangerous_sink\",\n                \"sink\": true/false,\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "574a297fea22e3aebd991627a5082a8620acf805a21ef19d36c1b69492360dd6",
+            "function_full_name": "dangerous_sink",
+            "sink": true,
+            "confidence": 0.9,
+            "reason": "The function 'dangerous_sink' is identified as a sink because it processes and potentially executes dangerous operations with the input data, such as system calls or file writes, as indicated by the comment in the code. The first parameter (index 1) is the source of the potentially dangerous data.",
+            "parameter_index": 1
+        }
+    },
+    "13bcad1649a5ababe5aae8dafdca91da": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: get_user_input\nFull Name: get_user_input\nSignature: int()\nFile: source.c\ncode: int get_user_input() {\n    printf(\"Enter a number: \");\n    int value;\n    scanf(\"%d\", &value);\n    return value;\n}\nuseage: user_data = get_user_input()\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "get_user_input",
+            "function_full_name": "get_user_input",
+            "source": "true",
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function directly interacts with user input by prompting the user to enter a number and then reading that input. This makes it a source of external data, which could potentially be untrusted or malicious."
+        }
+    },
+    "8ba62fc6b8049e4f3140ef0ddeb2e653": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: get_sensitive_data\nFull Name: get_sensitive_data\nSignature: char*()\nFile: source.c\ncode: char* get_sensitive_data() {\n    return \"sensitive_password_123\";\n}\nuseage: * sensitive = get_sensitive_data()\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "get_sensitive_data",
+            "function_full_name": "get_sensitive_data",
+            "source": "true",
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function returns a hardcoded sensitive string, which is a common pattern for source functions that provide sensitive data."
+        }
+    },
+    "866e621971c72c7042f15f079403e843": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: scanf\nFull Name: scanf\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    printf(\"Enter a number: \");\n    int value;\n    scanf(\"%d\", &value);\n    return value;\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "scanf",
+            "function_full_name": "scanf",
+            "source": "true",
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function 'scanf' is commonly used to read input from the user, making it a potential source of untrusted input which can be exploited if not properly validated."
+        }
+    },
+    "e141b8d0bcf7c89f964667528ef97aa0": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: dangerous_sink\nFull Name: dangerous_sink\nSignature: void(int)\nFile: main.c\ncode: void dangerous_sink(int data) {\n    printf(\"SINK: Received potentially dangerous data: %d\\n\", data);\n    // 模拟危险操作，如系统调用、文件写入等\n}\nuseage: {\n        dangerous_sink(transferred);  // 潜在的安全问题\n    }\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"574a297fea22e3aebd991627a5082a8620acf805a21ef19d36c1b69492360dd6\",\n                \"function_full_name\": \"dangerous_sink\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "574a297fea22e3aebd991627a5082a8620acf805a21ef19d36c1b69492360dd6",
+            "function_full_name": "dangerous_sink",
+            "sink": true,
+            "parameter_index": 1,
+            "confidence": 0.9,
+            "reason": "The function 'dangerous_sink' is identified as a sink because it processes and potentially executes dangerous operations with the input data, as indicated by the comment simulating dangerous operations like system calls or file writes."
+        }
+    },
+    "bbc15c6b29299114dd7362f3c3657f64": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: safe_sink\nFull Name: safe_sink\nSignature: void(int)\nFile: main.c\ncode: void safe_sink(int data) {\n    printf(\"SAFE SINK: Safely processed data: %d\\n\", data);\n}\nuseage: {\n        safe_sink(transferred);\n    }\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"583ab7357f6a74a16775e9d05f8c3d0edc1021876fc5831dcc201691bcd3c33c\",\n                \"function_full_name\": \"safe_sink\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "583ab7357f6a74a16775e9d05f8c3d0edc1021876fc5831dcc201691bcd3c33c",
+            "function_full_name": "safe_sink",
+            "sink": false,
+            "parameter_index": 1,
+            "confidence": 0.9,
+            "reason": "The function 'safe_sink' prints the input data but does not perform any unsafe operations or expose the data to potential vulnerabilities, making it a safe sink."
+        }
+    },
+    "a67bce3540df55d25231fcdcc8b42dab": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: handle_string\nFull Name: handle_string\nSignature: void(char*)\nFile: util.c\ncode: void handle_string(char* str) {\n    printf(\"Handling string: %s\\n\", str);\n    // 这里可能存在安全问题 - 直接打印敏感数据\n}\nuseage: {\n    printf(\"=== 数据流传播测试 ===\\n\");\n    \n    // 数据流1: 用户输入 -> 传输 -> 危险sink\n    int user_data = get_user_input();\n    int transferred = transfer_data(user_data);\n    \n    if (validate_data(transferred)) {\n        safe_sink(transferred);\n    } else {\n        dangerous_sink(transferred);  // 潜在的安全问题\n    }\n    \n    // 数据流2: 敏感数据 -> 字符串处理\n    char* sensitive = get_sensitive_data();\n    handle_string(sensitive);  // 敏感数据泄露\n    \n    printf(\"=== 测试完成 ===\\n\");\n    return 0;\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"97cccf63c09cca8cdd3c2bad22c5badb459e70afa35b45f414cd278a401570d8\",\n                \"function_full_name\": \"handle_string\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "97cccf63c09cca8cdd3c2bad22c5badb459e70afa35b45f414cd278a401570d8",
+            "function_full_name": "handle_string",
+            "sink": true,
+            "parameter_index": 1,
+            "confidence": 0.9,
+            "reason": "The function directly prints the input string, which could lead to sensitive data exposure if the input contains sensitive information."
+        }
+    },
+    "7354e05cbb444b5371df2fb485637835": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: printf\nFull Name: printf\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    printf(\"SINK: Received potentially dangerous data: %d\\n\", data);\n    // 模拟危险操作，如系统调用、文件写入等\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"33adc03fe135660411840b52edcbc233ec47298b8ada1ea5e2dbec39ff021d23\",\n                \"function_full_name\": \"printf\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "33adc03fe135660411840b52edcbc233ec47298b8ada1ea5e2dbec39ff021d23",
+            "function_full_name": "printf",
+            "sink": true,
+            "parameter_index": 1,
+            "confidence": 0.9,
+            "reason": "The function 'printf' is used to output data, which can be a sink if the data is not properly sanitized, leading to potential format string vulnerabilities or information disclosure. In the provided usage, the first parameter is a format string that includes user-controlled data ('%d'), making it a potential sink for malicious input."
+        }
+    },
+    "428f5e2f4868430f1c1b58b0dd575e4d": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n', 'full_name: CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad\\nSignature: void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\\nUsage Query: {\\n\\n    srand( (unsigned)time(NULL) );\\n\\n    printLine(\"Calling good()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\\n    printLine(\"Finished good()\");\\n\\n\\n    printLine(\"Calling bad()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\\n    printLine(\"Finished bad()\");\\n\\n    return 0;\\n}\\n', 'full_name: goodG2B\\nSignature: void goodG2B()\\nUsage Query: {\\n    goodG2B();\\n}\\n', 'full_name: CWE78_OS_Command_Injection__char_connect_socket_execl_01_good\\nSignature: void CWE78_OS_Command_Injection__char_connect_socket_execl_01_good()\\nUsage Query: {\\n\\n    srand( (unsigned)time(NULL) );\\n\\n    printLine(\"Calling good()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\\n    printLine(\"Finished good()\");\\n\\n\\n    printLine(\"Calling bad()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\\n    printLine(\"Finished bad()\");\\n\\n    return 0;\\n}\\n', 'full_name: main\\nSignature: int main(int, char[]*)\\nUsage Query: N/A\\n', 'full_name: <includes>:<global>\\nSignature: ANY <global>()\\nUsage Query: N/A\\n', 'full_name: printLongLongLine\\nSignature: void printLongLongLine(int64_t)\\nUsage Query: N/A\\n', 'full_name: printHexCharLine\\nSignature: void printHexCharLine(char)\\nUsage Query: N/A\\n', 'full_name: printWcharLine\\nSignature: void printWcharLine(wchar_t)\\nUsage Query: N/A\\n', 'full_name: printBytesLine\\nSignature: void printBytesLine(unsigned char*, size_t)\\nUsage Query: N/A\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                    "function_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01.c:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Global scope function without specific implementation details."
+                },
+                {
+                    "key": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                    "function_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function name suggests it's a bad practice example, likely a sink for OS command injection."
+                },
+                {
+                    "key": "goodG2B",
+                    "function_full_name": "goodG2B",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.8,
+                    "reason": "Function name suggests it's a good example, possibly sanitizing inputs."
+                },
+                {
+                    "key": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_good",
+                    "function_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_good",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.9,
+                    "reason": "Function name suggests it's a good practice example, likely sanitizing inputs."
+                },
+                {
+                    "key": "main",
+                    "function_full_name": "main",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Main function without specific details on handling sensitive data."
+                },
+                {
+                    "key": "<includes>:<global>",
+                    "function_full_name": "<includes>:<global>",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Global scope function without specific implementation details."
+                },
+                {
+                    "key": "printLongLongLine",
+                    "function_full_name": "printLongLongLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Utility function for printing, no direct role in data flow."
+                },
+                {
+                    "key": "printHexCharLine",
+                    "function_full_name": "printHexCharLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Utility function for printing, no direct role in data flow."
+                },
+                {
+                    "key": "printWcharLine",
+                    "function_full_name": "printWcharLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Utility function for printing, no direct role in data flow."
+                },
+                {
+                    "key": "printBytesLine",
+                    "function_full_name": "printBytesLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Utility function for printing, no direct role in data flow."
+                }
+            ]
+        }
+    },
+    "a9fd9227635e0874a6b20433df13a792": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: printShortLine\\nSignature: void printShortLine(short)\\nUsage Query: N/A\\n', 'full_name: printLongLine\\nSignature: void printLongLine(long)\\nUsage Query: N/A\\n', 'full_name: printFloatLine\\nSignature: void printFloatLine(float)\\nUsage Query: N/A\\n', 'full_name: printLine\\nSignature: void printLine(char*)\\nUsage Query: {\\n\\n    srand( (unsigned)time(NULL) );\\n\\n    printLine(\"Calling good()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\\n    printLine(\"Finished good()\");\\n\\n\\n    printLine(\"Calling bad()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\\n    printLine(\"Finished bad()\");\\n\\n    return 0;\\n}\\n', 'full_name: decodeHexChars\\nSignature: size_t decodeHexChars(unsigned char*, size_t, char*)\\nUsage Query: N/A\\n', 'full_name: printUnsignedLine\\nSignature: void printUnsignedLine(unsigned)\\nUsage Query: N/A\\n', 'full_name: printHexUnsignedCharLine\\nSignature: void printHexUnsignedCharLine(unsigned char)\\nUsage Query: N/A\\n', 'full_name: globalReturnsTrueOrFalse\\nSignature: int globalReturnsTrueOrFalse()\\nUsage Query: N/A\\n', 'full_name: globalReturnsFalse\\nSignature: int globalReturnsFalse()\\nUsage Query: N/A\\n', 'full_name: globalReturnsTrue\\nSignature: int globalReturnsTrue()\\nUsage Query: N/A\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "printShortLine",
+                    "function_full_name": "printShortLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function prints a short value, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "printLongLine",
+                    "function_full_name": "printLongLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function prints a long value, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "printFloatLine",
+                    "function_full_name": "printFloatLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function prints a float value, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "printLine",
+                    "function_full_name": "printLine",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.8,
+                    "reason": "Function prints a string, potential for output manipulation if input is not sanitized."
+                },
+                {
+                    "key": "decodeHexChars",
+                    "function_full_name": "decodeHexChars",
+                    "source": "true",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.7,
+                    "reason": "Function decodes hex characters, potential source of data if input is controlled by an attacker."
+                },
+                {
+                    "key": "printUnsignedLine",
+                    "function_full_name": "printUnsignedLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function prints an unsigned value, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "printHexUnsignedCharLine",
+                    "function_full_name": "printHexUnsignedCharLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function prints an unsigned char in hex, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "globalReturnsTrueOrFalse",
+                    "function_full_name": "globalReturnsTrueOrFalse",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function returns a boolean, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "globalReturnsFalse",
+                    "function_full_name": "globalReturnsFalse",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function returns false, no data manipulation or security risk identified."
+                },
+                {
+                    "key": "globalReturnsTrue",
+                    "function_full_name": "globalReturnsTrue",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function returns true, no data manipulation or security risk identified."
+                }
+            ]
+        }
+    },
+    "332fbb7a98262a85f06995db2843e16b": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: printSizeTLine\\nSignature: void printSizeTLine(size_t)\\nUsage Query: N/A\\n', 'full_name: printIntLine\\nSignature: void printIntLine(int)\\nUsage Query: N/A\\n', 'full_name: printStructLine\\nSignature: void printStructLine(twoIntsStruct*)\\nUsage Query: N/A\\n', 'full_name: decodeHexWChars\\nSignature: size_t decodeHexWChars(unsigned char*, size_t, wchar_t*)\\nUsage Query: N/A\\n', 'full_name: printWLine\\nSignature: void printWLine(wchar_t*)\\nUsage Query: N/A\\n', 'full_name: printDoubleLine\\nSignature: void printDoubleLine(double)\\nUsage Query: N/A\\n', 'full_name: strlen\\nSignature: ANY strlen(ANY)\\nUsage Query: dataLen = strlen(data)\\n', 'full_name: socket\\nSignature: ANY socket(ANY, ANY, ANY)\\nUsage Query: connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)\\n', 'full_name: memset\\nSignature: ANY memset(ANY, ANY, ANY)\\nUsage Query: {\\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\\n            if (connectSocket == -1)\\n            {\\n                break;\\n            }\\n            memset(&service, 0, sizeof(service));\\n            service.sin_family = AF_INET;\\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\\n            service.sin_port = htons(27015);\\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\\n            {\\n                break;\\n            }\\n\\n\\n\\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\\n            if (recvResult == -1 || recvResult == 0)\\n            {\\n                break;\\n            }\\n\\n            data[dataLen + recvResult / sizeof(char)] = \\'\\\\0\\';\\n\\n            replace = strchr(data, \\'\\\\r\\');\\n            if (replace)\\n            {\\n                *replace = \\'\\\\0\\';\\n            }\\n            replace = strchr(data, \\'\\\\n\\');\\n            if (replace)\\n            {\\n                *replace = \\'\\\\0\\';\\n            }\\n        }\\n', 'full_name: inet_addr\\nSignature: ANY inet_addr(ANY)\\nUsage Query: service.sin_addr.s_addr = inet_addr(\"127.0.0.1\")\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "printSizeTLine",
+                    "function_full_name": "printSizeTLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function only prints a size_t value, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "printIntLine",
+                    "function_full_name": "printIntLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function only prints an int value, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "printStructLine",
+                    "function_full_name": "printStructLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function only prints a struct, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "decodeHexWChars",
+                    "function_full_name": "decodeHexWChars",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.8,
+                    "reason": "Function decodes hex characters, potentially sanitizing input by converting it from a hex representation."
+                },
+                {
+                    "key": "printWLine",
+                    "function_full_name": "printWLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function only prints a wide character string, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "printDoubleLine",
+                    "function_full_name": "printDoubleLine",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function only prints a double value, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "strlen",
+                    "function_full_name": "strlen",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function calculates the length of a string, no data manipulation or interaction with external systems."
+                },
+                {
+                    "key": "socket",
+                    "function_full_name": "socket",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function creates a socket, which can be used to interact with external systems, making it a potential sink."
+                },
+                {
+                    "key": "memset",
+                    "function_full_name": "memset",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.8,
+                    "reason": "Function fills memory with a constant byte, potentially sanitizing memory areas by overwriting them."
+                },
+                {
+                    "key": "inet_addr",
+                    "function_full_name": "inet_addr",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Function converts an IP address string to its binary representation, no direct interaction with external systems."
+                }
+            ]
+        }
+    },
+    "91094640f2bafadf57ef133e0e0d1dc9": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请查看如下的函数列表，根据提供的信息分析其中可能存在的漏洞source，sink和sanitizer。"
+            },
+            {
+                "role": "user",
+                "content": "\n            列表如下：\n            ['full_name: htons\\nSignature: ANY htons(ANY)\\nUsage Query: service.sin_port = htons(27015)\\n', 'full_name: connect\\nSignature: ANY connect(ANY, ANY, ANY)\\nUsage Query: connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1\\n', 'full_name: recv\\nSignature: ANY recv(ANY, ANY, ANY, ANY)\\nUsage Query: recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)\\n', \"full_name: strchr\\nSignature: ANY strchr(ANY, ANY)\\nUsage Query: replace = strchr(data, '\\\\r')\\n\", 'full_name: close\\nSignature: ANY close(ANY)\\nUsage Query: {\\n            close(connectSocket);\\n        }\\n', 'full_name: execl\\nSignature: ANY execl(ANY, ANY, ANY, ANY, ANY)\\nUsage Query: {\\n    char * data;\\n    char dataBuffer[100] = \"ls \";\\n    data = dataBuffer;\\n    {\\n\\n\\n\\n\\n        int recvResult;\\n        struct sockaddr_in service;\\n        char *replace;\\n        int connectSocket = -1;\\n        size_t dataLen = strlen(data);\\n        do\\n        {\\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\\n            if (connectSocket == -1)\\n            {\\n                break;\\n            }\\n            memset(&service, 0, sizeof(service));\\n            service.sin_family = AF_INET;\\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\\n            service.sin_port = htons(27015);\\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\\n            {\\n                break;\\n            }\\n\\n\\n\\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\\n            if (recvResult == -1 || recvResult == 0)\\n            {\\n                break;\\n            }\\n\\n            data[dataLen + recvResult / sizeof(char)] = \\'\\\\0\\';\\n\\n            replace = strchr(data, \\'\\\\r\\');\\n            if (replace)\\n            {\\n                *replace = \\'\\\\0\\';\\n            }\\n            replace = strchr(data, \\'\\\\n\\');\\n            if (replace)\\n            {\\n                *replace = \\'\\\\0\\';\\n            }\\n        }\\n        while (0);\\n        if (connectSocket != -1)\\n        {\\n            close(connectSocket);\\n        }\\n\\n\\n    }\\n\\n\\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\\n}\\n', 'full_name: strcat\\nSignature: ANY strcat(ANY, ANY)\\nUsage Query: {\\n    char * data;\\n    char dataBuffer[100] = \"ls \";\\n    data = dataBuffer;\\n\\n    strcat(data, \"*.*\");\\n\\n\\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\\n}\\n', 'full_name: srand\\nSignature: ANY srand(ANY)\\nUsage Query: {\\n\\n    srand( (unsigned)time(NULL) );\\n\\n    printLine(\"Calling good()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\\n    printLine(\"Finished good()\");\\n\\n\\n    printLine(\"Calling bad()...\");\\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\\n    printLine(\"Finished bad()\");\\n\\n    return 0;\\n}\\n', 'full_name: time\\nSignature: ANY time(ANY)\\nUsage Query: (unsigned)time(NULL)\\n']\n            请分析每个函数的角色，并返回一个列表，包含每个函数的角色\n            角色可以是source、sink或sanitizer，或者None。\n            要求用json返回结构，返回的结果应如下：\n            {\n                \"analysis_result\": [\n                    {                        \n                        \"key\": \"function_key\",\n                        \"function_full_name\": \"function_full_name\",\n                        \"source\": \"true/false\",\n                        \"sink\": \"true/false\",\n                        \"sanitizer\": \"true/false\",\n                        \"confidence\": 0.9,\n                        \"reason\": \"分析原因\"\n                    },\n                ]   \n            }\n        "
+            }
+        ],
+        "response": {
+            "analysis_result": [
+                {
+                    "key": "htons",
+                    "function_full_name": "htons",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 1.0,
+                    "reason": "Function is used for converting values between host and network byte order, not directly involved in data flow vulnerabilities."
+                },
+                {
+                    "key": "connect",
+                    "function_full_name": "connect",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 1.0,
+                    "reason": "Establishes a connection to a socket, not directly involved in data flow vulnerabilities."
+                },
+                {
+                    "key": "recv",
+                    "function_full_name": "recv",
+                    "source": "true",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Receives data from a socket, which can be a source of untrusted input."
+                },
+                {
+                    "key": "strchr",
+                    "function_full_name": "strchr",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "true",
+                    "confidence": 0.8,
+                    "reason": "Used to find and replace characters in a string, potentially sanitizing input by removing unwanted characters."
+                },
+                {
+                    "key": "close",
+                    "function_full_name": "close",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 1.0,
+                    "reason": "Closes a file descriptor, not directly involved in data flow vulnerabilities."
+                },
+                {
+                    "key": "execl",
+                    "function_full_name": "execl",
+                    "source": "false",
+                    "sink": "true",
+                    "sanitizer": "false",
+                    "confidence": 0.9,
+                    "reason": "Executes a shell command, making it a potential sink for command injection vulnerabilities."
+                },
+                {
+                    "key": "strcat",
+                    "function_full_name": "strcat",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 0.7,
+                    "reason": "Concatenates strings, which could potentially be involved in constructing malicious commands if not properly sanitized."
+                },
+                {
+                    "key": "srand",
+                    "function_full_name": "srand",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 1.0,
+                    "reason": "Initializes the random number generator, not directly involved in data flow vulnerabilities."
+                },
+                {
+                    "key": "time",
+                    "function_full_name": "time",
+                    "source": "false",
+                    "sink": "false",
+                    "sanitizer": "false",
+                    "confidence": 1.0,
+                    "reason": "Gets the current calendar time, not directly involved in data flow vulnerabilities."
+                }
+            ]
+        }
+    },
+    "e983572f9c46418635e0329c58c1665d": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: decodeHexChars\nFull Name: decodeHexChars\nSignature: size_t(unsigned char*,size_t,char*)\nFile: CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\ncode: size_t decodeHexChars(unsigned char * bytes, size_t numBytes, const char * hex);\nuseage: N/A\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "decodeHexChars",
+            "function_full_name": "decodeHexChars",
+            "source": "false",
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function 'decodeHexChars' appears to be a utility function for decoding hexadecimal characters into bytes, which does not directly interact with user input or external systems in a way that would make it a source for command injection vulnerabilities."
+        }
+    },
+    "c7874b9d134b6748cc7829dce788c6b2": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: recv\nFull Name: recv\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n        "
+            }
+        ],
+        "response": {
+            "key": "recv",
+            "function_full_name": "recv",
+            "source": "true",
+            "parameter_index": 1,
+            "confidence": 0.9,
+            "reason": "The 'recv' function is commonly used to receive data from a socket, which can be a source of untrusted input. The parameter at index 1 is a buffer where the received data is stored, making it a potential source for security vulnerabilities if not properly handled."
+        }
+    },
+    "07962ddd73dc6f4e3d0a43e1dad98b5a": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad\nFull Name: CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad\nSignature: void()\nFile: CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\ncode: void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\nuseage: {\n\n    srand( (unsigned)time(NULL) );\n\n    printLine(\"Calling good()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\n    printLine(\"Finished good()\");\n\n\n    printLine(\"Calling bad()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\n    printLine(\"Finished bad()\");\n\n    return 0;\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"330a20fde9eeda447d74549209732e3030510fe31398298a14b22e815b5b0d2b\",\n                \"function_full_name\": \"CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "330a20fde9eeda447d74549209732e3030510fe31398298a14b22e815b5b0d2b",
+            "function_full_name": "CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad",
+            "sink": true,
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function 'CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad' is identified as a sink because it uses the 'execl' function to execute a command constructed from user-controlled input ('data'), which can lead to OS command injection vulnerabilities. The 'data' variable is populated with input received from a socket, making it susceptible to malicious input that could execute arbitrary commands."
+        }
+    },
+    "4fad705fc5d693126396b1305c5a19ec": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: printLine\nFull Name: printLine\nSignature: void(char*)\nFile: CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\ncode: void printLine(const char * line);\nuseage: {\n\n    srand( (unsigned)time(NULL) );\n\n    printLine(\"Calling good()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_good();\n    printLine(\"Finished good()\");\n\n\n    printLine(\"Calling bad()...\");\n    CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad();\n    printLine(\"Finished bad()\");\n\n    return 0;\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"731b02e3ba0c9ee7b0a0f2abe27de1515c8c8e5add27de08fe6e88a2efa53c7f\",\n                \"function_full_name\": \"printLine\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "731b02e3ba0c9ee7b0a0f2abe27de1515c8c8e5add27de08fe6e88a2efa53c7f",
+            "function_full_name": "printLine",
+            "sink": false,
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function 'printLine' is used for logging or printing messages to the console and does not interact with system commands or sensitive data directly. Therefore, it is not considered a sink for security vulnerabilities like OS command injection."
+        }
+    },
+    "1dbb25dc4d4fb315cb69600722c4959d": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: socket\nFull Name: socket\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"cf371e54b0f5af2bc58fcaeee01ddd4da7b65653b40f8664e15346ee86d0b0b4\",\n                \"function_full_name\": \"socket\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "cf371e54b0f5af2bc58fcaeee01ddd4da7b65653b40f8664e15346ee86d0b0b4",
+            "function_full_name": "socket",
+            "sink": false,
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The 'socket' function itself is not a sink but a mechanism to create a communication endpoint. It is the usage of the socket (e.g., sending or receiving data) that could potentially be a sink if not properly secured."
+        }
+    },
+    "cbb1ef65d7ade48c9fabbe436e81574e": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是sink"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: execl\nFull Name: execl\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: {\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {\n                \"key\": \"709f8870cd012c7b2ffb2ced7a1b33da40f7258a6620d34327db3dda29452b02\",\n                \"function_full_name\": \"execl\",\n                \"sink\": true/false,\n                \"parameter_index\": -1, # -1表示返回值 ,1表示第一个参数，2表示第二个参数，以此类推\n                \"confidence\": 0.9,\n                \"reason\": \"分析原因\"\n            }\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "709f8870cd012c7b2ffb2ced7a1b33da40f7258a6620d34327db3dda29452b02",
+            "function_full_name": "execl",
+            "sink": true,
+            "parameter_index": 4,
+            "confidence": 0.9,
+            "reason": "The function 'execl' is used to execute a shell command. The fourth parameter 'data' is directly taken from a socket input without proper sanitization, making it vulnerable to command injection attacks."
+        }
+    },
+    "bfbf96f969a6639a52e677dc0a60ade0": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: decodeHexChars\nFull Name: decodeHexChars\nSignature: size_t(unsigned char*,size_t,char*)\nFile: CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\ncode: size_t decodeHexChars(unsigned char * bytes, size_t numBytes, const char * hex);\nuseage: N/A\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "decodeHexChars",
+            "function_full_name": "decodeHexChars",
+            "source": "false",
+            "parameter_index": -1,
+            "confidence": 0.9,
+            "reason": "The function 'decodeHexChars' is designed to decode hexadecimal characters into bytes, which does not inherently involve the handling of user input or external data that could be considered a source for security vulnerabilities such as command injection. Its role is more about data transformation rather than data input or output that could lead to security issues."
+        }
+    },
+    "a246a6c0a111c94e66d78ce805573427": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是漏洞挖掘专家，请判断函数是否是source"
+            },
+            {
+                "role": "user",
+                "content": "\n            函数信息如下：\n            Function Name: recv\nFull Name: recv\nSignature: N/A\nFile: <empty>\ncode: <empty>\nuseage: recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0)\n\n            请确认该函数的角色，并返回一个json对象，包含以下字段：\n            {'key': '{func.get_function_key()}', 'function_full_name': '{func.full_name}', 'source': 'true/false', 'parameter_index': -1, 'confidence': 0.9, 'reason': '分析原因'}\n    **重要：必须精确定位source/sink的具体参数位置**\n    - 参数索引：1表示第一个参数，2表示第二个参数，以此类推\n    - 返回值：-1表示函数返回值\n    - 对象实例：0表示this/self指针（面向对象方法）\n        "
+            }
+        ],
+        "response": {
+            "key": "recv",
+            "function_full_name": "recv",
+            "source": "true",
+            "parameter_index": 2,
+            "confidence": 0.9,
+            "reason": "The 'recv' function is commonly used to receive data from a socket, making the buffer (second parameter) a potential source of untrusted input."
+        }
+    },
+    "1194c1395592d39859ee1a03e2f3f544": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析以下代码，判断其是否可能导致命令注入漏洞。\n\n    **核心分析原则：**\n    1. 只有当数据流中包含真正的外部不可信输入时，才可能构成安全漏洞\n    2. 纯粹操作硬编码常量、字面量的函数调用不应被视为漏洞源\n    3. 必须存在攻击者可控制的数据路径才构成真正的威胁\n\n    **漏洞源（Source）识别规则：**\n    - ✅ 有效源：接收外部输入的函数（recv, read, scanf, getenv, argv等）\n    - ✅ 有效源：读取外部文件/网络数据的函数\n    - ❌ 无效源：仅操作硬编码字符串的函数（如 strcat(buf, \"固定字符串\")）\n    - ❌ 无效源：所有参数都是编译时常量的函数调用\n\n    **数据流分析要求：**\n    1. **溯源分析**：追踪到数据的最初来源，确认是否为外部输入\n    2. **污点传播**：只有被外部输入\"污染\"的数据才应被跟踪\n    3. **上下文感知**：分析函数调用的具体参数，区分硬编码值和动态输入\n    4. **攻击可行性**：评估攻击者是否真正能够控制数据流\n\n    **特殊情况处理：**\n    - 如果source函数的所有参数都是硬编码常量 → 不构成漏洞\n    - 如果数据流路径中没有真正的外部输入点 → 不构成漏洞  \n    - 如果所有中间节点都是硬编码操作 → 不构成漏洞\n    - 字符串拼接函数需要检查被拼接的内容是否包含用户可控数据\n\n    **置信度评估标准：**\n    - 高置信度 (0.8-1.0)：明确的外部输入直达危险函数，无有效防护\n    - 中置信度 (0.5-0.7)：存在外部输入但有部分防护措施\n    - 低置信度 (0.1-0.4)：数据流存在但攻击难度很高\n    - 无漏洞 (0.0)：无真正的外部输入或已有有效防护\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"is_vulnerable\": true|false,  # 是否存在漏洞\n            \"confidence\": \"置信度（0.0-1.0）\",\n            \"reason\": \"详细的判断理由，必须说明数据来源分析和攻击可行性\",\n            \"attack_vector\": \"具体的攻击向量描述（如果存在漏洞）\"\n        }\n    }\n    "
+            },
+            {
+                "role": "user",
+                "content": "请分析以下数据流路径：\n\n    源（source）：recv\n    汇聚点（sink）：CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad\n\n    数据流路径：\n    void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n    **分析要求：**\n    1. 首先确定source是否为真正的外部输入源\n    2. 追踪数据流中每个节点的数据来源\n    3. 评估攻击者控制数据的可能性\n    4. 判断是否存在有效的防护措施\n    5. 给出明确的漏洞判断和理由\n\n    **重点关注：**\n    - 如果source函数仅处理硬编码数据，请明确指出这不构成安全风险\n    - 如果存在字符串操作函数，请分析其操作的数据是否来源于外部输入\n    - 提供具体的数据流分析，而不是泛泛的可能性描述\n    "
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "is_vulnerable": true,
+                "confidence": 0.9,
+                "reason": "The source function 'recv' receives external input from a socket connection, which is directly concatenated with a hardcoded string 'ls ' and then passed to 'execl' without any sanitization or validation. This creates a direct path for command injection, as an attacker can control the data received via the socket connection to inject arbitrary commands.",
+                "attack_vector": "An attacker can connect to the specified socket (127.0.0.1:27015) and send malicious commands that will be executed by the system. For example, sending '; rm -rf /' would result in the execution of 'ls ; rm -rf /', leading to potential system compromise."
+            }
+        }
+    },
+    "b451bea38fe2ec47ca3d007cf3cb89a1": {
+        "request": [
+            {
+                "role": "system",
+                "content": "你是一个专业的代码安全分析专家，专注于识别CWE-78（OS命令注入）漏洞。\n    请分析以下代码，判断其是否可能导致命令注入漏洞。\n\n    **核心分析原则：**\n    1. 只有当数据流中包含真正的外部不可信输入时，才可能构成安全漏洞\n    2. 纯粹操作硬编码常量、字面量的函数调用不应被视为漏洞源\n    3. 必须存在攻击者可控制的数据路径才构成真正的威胁\n\n    **漏洞源（Source）识别规则：**\n    - ✅ 有效源：接收外部输入的函数（recv, read, scanf, getenv, argv等）\n    - ✅ 有效源：读取外部文件/网络数据的函数\n    - ❌ 无效源：仅操作硬编码字符串的函数（如 strcat(buf, \"固定字符串\")）\n    - ❌ 无效源：所有参数都是编译时常量的函数调用\n\n    **数据流分析要求：**\n    1. **溯源分析**：追踪到数据的最初来源，确认是否为外部输入\n    2. **污点传播**：只有被外部输入\"污染\"的数据才应被跟踪\n    3. **上下文感知**：分析函数调用的具体参数，区分硬编码值和动态输入\n    4. **攻击可行性**：评估攻击者是否真正能够控制数据流\n\n    **特殊情况处理：**\n    - 如果source函数的所有参数都是硬编码常量 → 不构成漏洞\n    - 如果数据流路径中没有真正的外部输入点 → 不构成漏洞  \n    - 如果所有中间节点都是硬编码操作 → 不构成漏洞\n    - 字符串拼接函数需要检查被拼接的内容是否包含用户可控数据\n\n    **置信度评估标准：**\n    - 高置信度 (0.8-1.0)：明确的外部输入直达危险函数，无有效防护\n    - 中置信度 (0.5-0.7)：存在外部输入但有部分防护措施\n    - 低置信度 (0.1-0.4)：数据流存在但攻击难度很高\n    - 无漏洞 (0.0)：无真正的外部输入或已有有效防护\n\n    请返回一个JSON对象，包含以下字段：\n    {\n        \"analysis_result\": {\n            \"is_vulnerable\": true|false,  # 是否存在漏洞\n            \"confidence\": \"置信度（0.0-1.0）\",\n            \"reason\": \"详细的判断理由，必须说明数据来源分析和攻击可行性\",\n            \"attack_vector\": \"具体的攻击向量描述（如果存在漏洞）\"\n        }\n    }\n    "
+            },
+            {
+                "role": "user",
+                "content": "请分析以下数据流路径：\n\n    源（source）：recv\n    汇聚点（sink）：execl\n\n    数据流路径：\n    void CWE78_OS_Command_Injection__char_connect_socket_execl_01_bad()\n{\n    char * data;\n    char dataBuffer[100] = \"ls \";\n    data = dataBuffer;\n    {\n\n\n\n\n        int recvResult;\n        struct sockaddr_in service;\n        char *replace;\n        int connectSocket = -1;\n        size_t dataLen = strlen(data);\n        do\n        {\n# 90 \"/home/nstl/data/CPGvulnHunter/test/test_case/juliet/organized_cwe/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c\"\n            connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);\n            if (connectSocket == -1)\n            {\n                break;\n            }\n            memset(&service, 0, sizeof(service));\n            service.sin_family = AF_INET;\n            service.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n            service.sin_port = htons(27015);\n            if (connect(connectSocket, (struct sockaddr*)&service, sizeof(service)) == -1)\n            {\n                break;\n            }\n\n\n\n            recvResult = recv(connectSocket, (char *)(data + dataLen), sizeof(char) * (100 - dataLen - 1), 0);\n            if (recvResult == -1 || recvResult == 0)\n            {\n                break;\n            }\n\n            data[dataLen + recvResult / sizeof(char)] = '\\0';\n\n            replace = strchr(data, '\\r');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n            replace = strchr(data, '\\n');\n            if (replace)\n            {\n                *replace = '\\0';\n            }\n        }\n        while (0);\n        if (connectSocket != -1)\n        {\n            close(connectSocket);\n        }\n\n\n    }\n\n\n    execl(\"/bin/sh\", \"/bin/sh\", \"-c\", data, NULL);\n}\n\n    **分析要求：**\n    1. 首先确定source是否为真正的外部输入源\n    2. 追踪数据流中每个节点的数据来源\n    3. 评估攻击者控制数据的可能性\n    4. 判断是否存在有效的防护措施\n    5. 给出明确的漏洞判断和理由\n\n    **重点关注：**\n    - 如果source函数仅处理硬编码数据，请明确指出这不构成安全风险\n    - 如果存在字符串操作函数，请分析其操作的数据是否来源于外部输入\n    - 提供具体的数据流分析，而不是泛泛的可能性描述\n    "
+            }
+        ],
+        "response": {
+            "analysis_result": {
+                "is_vulnerable": true,
+                "confidence": 0.9,
+                "reason": "数据来源于recv函数，这是一个明确的外部输入源，攻击者可以通过网络连接控制输入数据。数据随后被直接用于execl函数调用，没有进行任何有效的输入验证或清理。攻击者可以注入恶意命令，因为数据流路径中没有防护措施。",
+                "attack_vector": "攻击者可以通过连接到127.0.0.1的27015端口，发送恶意命令字符串，这些字符串将被直接传递给execl函数执行，导致命令注入漏洞。"
+            }
+        }
+    }
+}

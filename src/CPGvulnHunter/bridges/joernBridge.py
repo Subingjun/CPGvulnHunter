@@ -213,6 +213,9 @@ class JoernBridge:
             # 重新连接
             self._test_connect()
             self.logger.info("Joern服务器已重启并重新连接")
+            #恢复上下文
+            for command in self.joern_cmd_history:
+                self.send_command(command)
         except Exception as e:
             self.logger.error(f"重启Joern服务器失败: {e}\n{traceback.format_exc()}")
             raise RuntimeError(f"无法恢复Joern服务器: {e}")

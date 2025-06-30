@@ -68,6 +68,21 @@ class CPG:
         self.logger.debug(f"函数全名列表: {self.function_fullName_list}... (总计: {len(self.function_fullName_list)})")
         self.logger.debug(f"cpg_var 初始化为: {self.cpg_var}")
     
+    def get_function_by_full_name(self, function_full_name: str) -> Optional[Function]:
+        """
+        根据函数全名获取函数对象
+        
+        :param function_full_name: 函数的全名
+        """
+        if not function_full_name:
+            self.logger.error("函数全名不能为空")
+            return None
+        for function in self.functions:
+            if function.full_name == function_full_name:
+                return function
+        self.logger.warning(f"未找到函数: {function_full_name}")
+        return None
+
     
     def _get_all_functions(self) :
         joern_wrapper = self.joern_wrapper
@@ -116,13 +131,13 @@ class CPG:
             return None
         
         if function.full_name:
-            if function.is_external:
-                # fill parameter and useage for external functions,for joern cant generate signature for external functions
-                if not function.full_name.startswith("<operator>"):
-                    parameters = joern_wrapper.get_parameter(function, cpg_var=self.cpg_var)
-                    function.set_parameters(parameters)
-                    useage = joern_wrapper.find_useage(function)
-                    function.set_useage(useage)                
+            if not function.full_name.startswith("<operator>"):
+                parameters = joern_wrapper.get_parameter(function, cpg_var=self.cpg_var)
+                function.set_parameters(parameters)
+                useage = joern_wrapper.find_useage(function)
+                function.set_useage(useage)       
+                signature = joern_wrapper.get_method_signature(function, cpg_var=self.cpg_var)  
+                function.set_full_signature(signature)       
             return function
         else:
             self.logger.warning(f"Function {function_full_name} not found.")

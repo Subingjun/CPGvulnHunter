@@ -1,3 +1,4 @@
+import logging
 import threading
 import queue
 import time
@@ -6,6 +7,8 @@ import atexit
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 from pathlib import Path
+
+import psutil
 
 from CPGvulnHunter.utils.threadLogger import get_thread_logger
 from CPGvulnHunter.core.config import ConfigManager
@@ -176,7 +179,7 @@ class JoernServerPool:
             with self.pool_lock:
                 if port in self.servers:
                     server_info = self.servers[port]
-                    if server_info.process.poll() is None and self.check_server(port=port):  # 进程仍在运行
+                    if server_info.process.poll() is None and self.check_server(port):  # 进程仍在运行
                         server_info.is_available = False
                         server_info.last_used = time.time()
                         self.logger.debug(f"分配服务器 - 端口: {port}")
@@ -247,39 +250,53 @@ class JoernServerPool:
             self.used_ports.discard(port)
             self.logger.error(f"服务器重启失败 - 端口: {port}")
             return False
-    
+        
+    import psutil
+
     def shutdown(self):
-        """关闭所有服务器"""
+        """关闭所有服务器及其子进程"""
         if not self._initialized:
             return
-            
+
         with self.pool_lock:
             self.logger.info("开始关闭所有Joern服务器")
-            
+
             for port, server_info in self.servers.items():
+                self.logger.info(f"关闭服务器 - 端口: {port}, PID: {server_info.process.pid}")
                 try:
-                    self.logger.debug(f"正在关闭服务器 - 端口: {port}")
-                    server_info.process.terminate()
-                    server_info.process.wait(timeout=5)
-                    self.logger.debug(f"服务器关闭成功 - 端口: {port}")
-                except subprocess.TimeoutExpired:
+                    # 获取父进程
+                    parent_process = psutil.Process(server_info.process.pid)
+
+                    # 终止所有子进程
+                    for child in parent_process.children(recursive=True):
+                        self.logger.info(f"关闭子进程 - PID: {child.pid}")
+                        child.terminate()
+                        child.wait(timeout=5)
+
+                    # 终止父进程
+                    parent_process.terminate()
+                    parent_process.wait(timeout=5)
+                    self.logger.info(f"服务器关闭成功 - 端口: {port}")
+                except psutil.TimeoutExpired:
                     self.logger.warning(f"服务器 {port} 关闭超时，强制杀死")
-                    server_info.process.kill()
+                    parent_process.kill()
+                    for child in parent_process.children(recursive=True):
+                        child.kill()
                 except Exception as e:
                     self.logger.error(f"关闭服务器 {port} 异常: {e}", exc_info=True)
-            
+
             self.servers.clear()
             self.used_ports.clear()
-            
+
             # 清空队列
             while not self.available_servers.empty():
                 try:
                     self.available_servers.get_nowait()
                 except queue.Empty:
                     break
-            
-            self.logger.info("所有Joern服务器已关闭")
-    
+
+            self.logger.info("所有Joern服务器及其子进程已关闭")
+        
     def get_pool_status(self) -> Dict:
         """获取服务器池状态"""
         with self.pool_lock:

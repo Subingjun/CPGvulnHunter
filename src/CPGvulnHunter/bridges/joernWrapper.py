@@ -158,6 +158,40 @@ class JoernWrapper():
             self.logger.error(f"未找到参数")
         return parameter_list
 
+
+    def get_method_signature(self, function: Function, cpg_var: str = "cpg") -> Optional[str]:
+        """
+        获取函数的签名
+        :param function: 函数对象
+        :return: 函数签名字符串或None
+        """
+        cmd = function.generateSignatureQuery()
+        result = self._execute_command(cmd)
+        if result is not None:
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return result
+        else:
+            self.logger.error(f"未找到函数 {function.full_name} 的签名")
+            return None
+
+    def get_return_type(self, function: Function, cpg_var: str = "cpg") -> Optional[str]:
+        """
+        获取函数的返回类型
+        :param function: 函数对象
+        :return: 返回类型字符串或None
+        """
+        cmd = function.generateReturnTypeQuery()
+        result = self._execute_command(cmd)
+        if result is not None:
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return result
+        else:
+            self.logger.error(f"未找到函数 {function.full_name} 的返回类型")
+            return None
+
+
     def find_useage(self, function: Function) -> str:
         "查找函数调用点的使用情况"
         #todo: 这里有很多的调用点，或许应该设计一种策略，让调用点和参数相关联？

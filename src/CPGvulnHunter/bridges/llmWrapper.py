@@ -14,6 +14,7 @@ from CPGvulnHunter.models.cpg.function import Function
 from CPGvulnHunter.models.cpg.semantics import ParameterFlow, Semantic, Semantics
 from CPGvulnHunter.models.llm.dataclass import LLMRequest
 from CPGvulnHunter.models.llm.prompt import FunctionPrompt
+from CPGvulnHunter.utils.llmCacher import LLMCacher
 from CPGvulnHunter.utils.threadLogger import get_thread_logger
 
 
@@ -33,15 +34,9 @@ class LLMWrapper:
         self.logger = get_thread_logger()
         self.logger.info("开始初始化LLM Wrapper...")
         self.config = ConfigManager.get_llm_config()
-        
-        # 初始化函数语义分析缓存
-        self._cache_file = Path("llm_cache/semantic_cache.json")
-        self._semantic_cache = {}  # key: function_signature, value: serialized Semantic
         self._cache_hits = 0
         self._cache_misses = 0
-        
-        # 加载持久化缓存
-        self._load_cache()
+        self.cacher = LLMCacher.get_instance()
         
         try:
             # 初始化LLM客户端
@@ -56,7 +51,6 @@ class LLMWrapper:
             init_time = time.time() - start_time
             
             self.logger.info(f"LLM Wrapper初始化成功，耗时: {init_time:.2f}秒")
-            self.logger.info(f"语义缓存已加载，共 {len(self._semantic_cache)} 条记录")
             self.logger.debug(f"LLM客户端类型: {type(self.llm_client).__name__}")
             
         except Exception as e:
@@ -64,42 +58,6 @@ class LLMWrapper:
             import traceback
             self.logger.error(f"初始化错误堆栈: {traceback.format_exc()}", exc_info=True)
             raise
-
-    def _load_cache(self):
-        """
-        从文件加载持久化缓存
-        """
-        try:
-            if self._cache_file.exists():
-                with open(self._cache_file, 'r', encoding='utf-8') as f:
-                    cache_data = json.load(f)
-                    self._semantic_cache = cache_data
-                    self.logger.info(f"成功加载缓存文件: {self._cache_file}, 包含 {len(self._semantic_cache)} 条记录")
-            else:
-                self.logger.info(f"缓存文件不存在，创建空缓存: {self._cache_file}")
-                # 确保缓存目录存在
-                self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-                self._semantic_cache = {}
-                
-        except Exception as e:
-            self.logger.error(f"加载缓存文件失败: {e}", exc_info=True)
-            self._semantic_cache = {}
-
-    def _save_cache(self):
-        """
-        保存缓存到文件
-        """
-        try:
-            # 确保缓存目录存在
-            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            with open(self._cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self._semantic_cache, f, ensure_ascii=False, indent=2)
-                
-            self.logger.debug(f"缓存已保存到文件: {self._cache_file}, 包含 {len(self._semantic_cache)} 条记录")
-                
-        except Exception as e:
-            self.logger.error(f"保存缓存文件失败: {e}", exc_info=True)
 
     def _semantic_to_dict(self, semantic: Semantic) -> dict:
         """
@@ -135,36 +93,10 @@ class LLMWrapper:
             is_regex=data.get('is_regex', False)
         )
 
-    def get_cache_stats(self) -> dict:
-        """
-        获取缓存统计信息
-        """
-        total_requests = self._cache_hits + self._cache_misses
-        hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0
-        
-        return {
-            'cache_size': len(self._semantic_cache),
-            'cache_hits': self._cache_hits,
-            'cache_misses': self._cache_misses,
-            'total_requests': total_requests,
-            'hit_rate': hit_rate,
-            'cache_file': str(self._cache_file)
-        }
-
-    def clear_cache(self):
-        """
-        清空缓存
-        """
-        self._semantic_cache.clear()
-        self._cache_hits = 0
-        self._cache_misses = 0
-        self._save_cache()
-        self.logger.info("缓存已清空")
 
     def analyze_external_functions(self, external_functions: List[Function]) -> Semantics:
         """
         分析外部函数并生成语义规则 - 逐个分析模式
-        
         :param external_functions: 外部函数列表
         :return: 生成的语义规则对象
         """
@@ -229,25 +161,22 @@ class LLMWrapper:
             return None
             
         func_name = func.full_name
-        func_signature = func.get_sigenature()  # 使用函数签名作为缓存key
-        
-        # 检查缓存
-        if func_signature in self._semantic_cache:
+        #妇女啊的缓存key全部统一用新的
+        #func_signature = func.get_sigenature()  # 使用函数签名作为缓存key
+        #还是用签名吧.....  
+        key = func.get_full_signature()
+        semantic_cache = self.cacher.find_semantic_cache(key)
+        if semantic_cache:
             self._cache_hits += 1
-            self.logger.debug(f"函数 {func_name} 从缓存中获取分析结果 (签名: {func_signature})")
+            self.logger.debug(f"函数 {func_name} 从缓存中获取分析结果 (签名: {key})")
             try:
-                cached_data = self._semantic_cache[func_signature]
-                semantic = self._dict_to_semantic(cached_data)
+                semantic = self._dict_to_semantic(semantic_cache)
                 return semantic
             except Exception as e:
-                self.logger.error(f"从缓存恢复语义规则失败: {e}，将重新分析")
-                # 缓存数据损坏，删除并重新分析
-                del self._semantic_cache[func_signature]
+                self.logger.error(f"从缓存恢复语义规则失败: {e}")
         
         self._cache_misses += 1
-        self.logger.debug(f"开始分析函数: {func_name} (签名: {func_signature})")
         self.logger.info(f"函数 {func_name} 的分析结果不在缓存中，开始构建LLM请求")
-        
         # 构建针对单个函数的提示词
         try:
             request = FunctionPrompt.build_semantic_analysis_request(func)
@@ -316,9 +245,8 @@ class LLMWrapper:
             # 将结果缓存到文件
             try:
                 semantic_dict = self._semantic_to_dict(rule)
-                self._semantic_cache[func_signature] = semantic_dict
-                self._save_cache()
-                self.logger.debug(f"函数 {func_name} 语义规则已缓存 (签名: {func_signature})")
+                self.cacher.add_semantic_cache(key, semantic_dict)
+                self.logger.debug(f"函数 {func_name} 语义规则已缓存 ")
             except Exception as e:
                 self.logger.warning(f"缓存函数 {func_name} 语义规则失败: {e}")
             
@@ -356,7 +284,8 @@ class LLMWrapper:
         # 返回分析结果
         return data
 
-    def function_clasification(self, llmRequest: LLMRequest) -> Optional[dict]:
+
+    def analysisi_function(self, llmRequest: LLMRequest) -> Optional[dict]:
         """
         分析单个函数的通用方法，只是做和大模型的交互，不进行任何分析。
         

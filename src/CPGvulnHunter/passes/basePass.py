@@ -56,7 +56,7 @@ class BasePass(ABC):
         functions = self.taget_functions
         for func in functions: 
             request = self.build_classify_method_request(func)
-            response = self.cpg.llm_wrapper.function_clasification(request)
+            response = self.cpg.llm_wrapper.analysisi_function(request)
             if not response or 'analysis_result' not in response:
                 self.logger.warning(f"LLM分析结果为空或格式不正确: {response}")
                 return
